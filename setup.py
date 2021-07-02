@@ -29,7 +29,7 @@ setup(
         "gym",
         "future",
         "sklearn",
-        "pyproj
+        "pyproj",
         "pytest",
     ],    
     python_requires=">=3.6",
