@@ -78,13 +78,24 @@ class InteractionSimulator(gym.Env):
         self._custom_reward = custom_reward
 
         # gym fields
-        # alternatively, spaces.Box
-        self.action_space = Box(low=-max_acc, high=max_acc, shape=(self._nv,1))
-
+        # using spaces.Box over intersim.Box
+        self.action_space = spaces.Box(low=-max_acc, high=max_acc, shape=(self._nv,1))
         low = torch.tensor([[-np.inf,-np.inf,0.,-np.pi, -np.inf]]).expand(self._nv,5)
         high = torch.tensor([[np.inf,np.inf,np.inf,np.pi, np.inf]]).expand(self._nv,5)
-        self.state_space = Box(low=low, high=high, shape=(self._nv,5))
+        self.state_space = spaces.Box(low=low, high=high, shape=(self._nv,5))
         self.done= False
+        self.info = {
+            'raw_state': self._state.clone(),
+            'xpoly': self._svt.xpoly,
+            'dxpoly': self._svt.dxpoly,
+            'ddxpoly': self._svt.ddxpoly,
+            'ypoly': self._svt.ypoly,
+            'dypoly': self._svt.dypoly,
+            'ddypoly': self._svt.ddypoly,
+            'smax': self._svt.smax,
+            'lengths': self._svt.lengths,
+            'widths': self._svt.widths,
+        }
         super(InteractionSimulator, self).__init__() # is this necessary??
 
     @property
@@ -176,7 +187,19 @@ class InteractionSimulator(gym.Env):
 
         self._t += self._dt
 
-        # TODO: check for proper action input
+        # check for proper action input
+        # 1) make sure all non-nan states have actions
+        # 2) set actions for all nan state to 0
+        # 3) make sure final action is inside action space, if not clamp
+        nns = ~torch.isnan(self._state[:,0]) 
+        nna = ~torch.isnan(action[:,0]) 
+        nns_na = nns & ~nna
+        if torch.any(nns_na):
+            raise Exception('Time: {}. Some cars receive nan actions')
+        action[~nna] = 0.
+        if not self.action_space.contains(action):
+            print('Time: {}. Warning: requested action outside of bounds, being clamped'.format(self._t))
+            action = action.clamp(-self._max_acc, self._max_acc)
 
         # euler step the state
         nextv = self._state[:,1:2] + action * self._dt
@@ -184,7 +207,7 @@ class InteractionSimulator(gym.Env):
         self._state[:,0:1] = self._state[:,0:1] + 0.5*self._dt*(nextv + self._state[:,1:2])
         self._state[:,1:2] = nextv
 
-        nni = ~torch.isnan(self._state[:,0])      
+             
 
         # see which states exceeded their maxes
         self._exceeded = (self._state[:,0] > self._svt.smax) | self._exceeded
@@ -195,11 +218,11 @@ class InteractionSimulator(gym.Env):
         
         # TODO: add an isFree checker 
         free = torch.tensor([True] * self._nv)
-        should_spawn = (self._svt.t0 < self._t) & ~self._exceeded & ~nni & free
+        should_spawn = (self._svt.t0 < self._t) & ~self._exceeded & ~nns & free
 
         # for now, just spawn them
         spawned = should_spawn
-        self._state[spawned,0] = 0.
+        self._state[spawned,0] = 0.001 # done to avoid potential DivByZero
         self._state[spawned,1] = self._svt.v0[spawned]
         
         projstate = self.projected_state
@@ -208,22 +231,21 @@ class InteractionSimulator(gym.Env):
         self._graph.update_graph(projstate)
 
         # generate info
-        self.info = {
+        self.info.update(
             'exceeded':np.argwhere(self._exceeded.detach().numpy()).flatten(),
             'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
             'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
-            'raw_state': self._state.clone(),
-            'xpoly': self._svt.xpoly
-            'ypoly': self._svt.ypoly
-            'smax': self._svt.smax
-        }
+            'raw_state': self._state.clone()
+            'action_taken': action.clone()
+        )
 
         # generate observation
-        ob = self._get_observation(projstate, info)
+        ob = self._get_observation(projstate)
         
         # generate reward from new state and action
         reward = self._get_reward(projstate, action)
-        return observation, reward, self.done, self.info   
+        return ob, reward, self.done, self.info   
+    
     def _get_observation(next_state):
         """
         Generate observation
@@ -246,6 +268,7 @@ class InteractionSimulator(gym.Env):
         if self._observe_method in [ObserveMethod.HIDDEN]:
             observation['hidden_info'] = self.info
         return observation
+    
     def _get_reward(next_state, action) -> float:
         """
         Generate reward
