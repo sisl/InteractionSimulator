@@ -16,11 +16,16 @@ from gym.utils import seeding
 import logging
 logger = logging.getLogger(__name__)
 
+from collections.abc import Callable
+
 class RewardMethod(Enum):
     """
     NONE: 0 reward throughout
+    CUSTOM: user-specified reward function R(next_state, action)
     """
-    NONE = 'none'   
+    NONE = 'none'
+    CUSTOM = 'custom'
+
 class ObserveMethod(Enum):
     """
     LIGHT: simple state and graph information
@@ -36,12 +41,15 @@ class InteractionSimulator(gym.Env):
     
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, svt: StackedVehicleTraj, 
+    def __init__(self, 
+                 svt: StackedVehicleTraj, 
                  map_object, 
                  graph: InteractionGraph = InteractionGraph(),
                  max_acc=1.0, 
                  reward_method='none', 
-                 observe_method='full'):
+                 observe_method='full',
+                 custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.
+                 ):
         """
         Roundabout simulator.
         Args:
@@ -67,6 +75,7 @@ class InteractionSimulator(gym.Env):
         self._graph = graph
         self._reward_method = RewardMethod(reward_method)
         self._observe_method = ObserveMethod(observe_method)
+        self._custom_reward = custom_reward
 
         # gym fields
         # alternatively, spaces.Box
@@ -75,8 +84,6 @@ class InteractionSimulator(gym.Env):
         low = torch.tensor([[-np.inf,-np.inf,0.,-np.pi, -np.inf]]).expand(self._nv,5)
         high = torch.tensor([[np.inf,np.inf,np.inf,np.pi, np.inf]]).expand(self._nv,5)
         self.state_space = Box(low=low, high=high, shape=(self._nv,5))
-
-        self.observation_space=None
         self.done= False
         super(InteractionSimulator, self).__init__() # is this necessary??
 
@@ -155,17 +162,21 @@ class InteractionSimulator(gym.Env):
         # extract map_info from self._map_object
         return None
 
-    def step(self, action):
+    def _step(self, action):
         """
         Step simulation forward 1 time-step.
         Args:
             action (torch.tensor): (nvehicles,1) accelerations
         Returns:
-            next_state (torch.tensor): (nvehicles*5,) next state
-            info (dict): info
+            observation (dict): observation dictionary
+            reward (float): reward
+            episode_over (bool): whether the episode has ended
+            info (dict): diagnostic information useful for debugging
         """
 
         self._t += self._dt
+
+        # TODO: check for proper action input
 
         # euler step the state
         nextv = self._state[:,1:2] + action * self._dt
@@ -178,6 +189,7 @@ class InteractionSimulator(gym.Env):
         # see which states exceeded their maxes
         self._exceeded = (self._state[:,0] > self._svt.smax) | self._exceeded
         self._state[self._exceeded] = np.nan
+        self.done = episode_over
 
         # see which new vehicles should spawn
         
@@ -195,24 +207,62 @@ class InteractionSimulator(gym.Env):
         # update interaction graph
         self._graph.update_graph(projstate)
 
-        observation = {}
-        observation['state'] = projstate.reshape(-1)
-        observation['neighbor_dict'] = self._graph.neighbor_dict
+        # generate info
+        self.info = {
+            'exceeded':np.argwhere(self._exceeded.detach().numpy()).flatten(),
+            'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
+            'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
+            'raw_state': self._state.clone(),
+            'xpoly': self._svt.xpoly
+            'ypoly': self._svt.ypoly
+            'smax': self._svt.smax
+        }
 
-        if self._observe_method in [ObserveMethod.FULL, ObserveMethod.HIDDEN]:
-            observation['relative_state'] = self.relative_state(projstate)
-            observation['map_info'] = self.map_info
+        # generate observation
+        ob = self._get_observation(projstate, info)
         
+        # generate reward from new state and action
+        reward = self._get_reward(projstate, action)
+        return observation, reward, self.done, self.info   
+    def _get_observation(next_state):
+        """
+        Generate observation
+        Args:
+            next_state (torch.tensor): (nv,5) projected next state
+        Returns:
+            observation (dict): observation with following potential keys
+                state (torch.tensor): (nv*5,) projected next state
+                neighbor_dict (dict): interaction graph neighbor dictionary
+                relative_state (torch.tensor): (nv,nv,5) relative state information where [i,j,k] encodes state[j,k] - state[i,k]
+                map_info: map information embedding
+                hidden_info: external information that would usually stay hidden for training
+        """
+        observation = {}
+        observation['state'] = next_state.reshape(-1)
+        observation['neighbor_dict'] = self._graph.neighbor_dict
+        if self._observe_method in [ObserveMethod.FULL, ObserveMethod.HIDDEN]:
+            observation['relative_state'] = self.relative_state(next_state)
+            observation['map_info'] = self.map_info
         if self._observe_method in [ObserveMethod.HIDDEN]:
-            observation['hidden_info'] = {
-                'exceeded':np.argwhere(self._exceeded.detach().numpy()).flatten(),
-                'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
-                'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
-                'raw_state': self._state.clone()
-            }
+            observation['hidden_info'] = self.info
         return observation
+    def _get_reward(next_state, action) -> float:
+        """
+        Generate reward
+        Args:
+            next_state (torch.tensor): (nv,5) next projected state
+            action (torch.tensor): (nv,) action taken
+        Returns:
+            reward (float): immediate reward
+        """
+        if self._reward_method == RewardMethod.NONE:
+            return 0.
+        elif self._reward_method == RewardMethod.CUSTOM:
+            return self._custom_reward(next_state, action)
+        else:
+            raise ValueError('Invalid reward method')
 
-    def reset(self):
+    def _reset(self):
         """
         Reset simulation.
         Returns:
@@ -223,11 +273,11 @@ class InteractionSimulator(gym.Env):
         self._state = self._svt.state0
         self._t = self._svt.minT
         self._exceeded = torch.tensor([False] * self._nv)
-
+        self.done = False
         return self.projected_state.reshape(-1), {'raw_state': self._state.clone()}
 
-    def render(self, mode='human'):
+    def _render(self, mode='human'):
         raise NotImplementedError
 
-    def close(self):
+    def _close(self):
         raise NotImplementedError
