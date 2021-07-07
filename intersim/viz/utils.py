@@ -15,6 +15,19 @@ import math
 from intersim.viz.dict_utils import *
 
 
+def to_circle(self, x):
+        """
+        Casts x (in rad) to [-pi, pi)
+        
+        Args:
+            x (torch.tensor): (*) input angles (radians)
+            
+        Returns:
+            y (torch.tensor): (*) x cast to [-pi, pi)
+        """
+        y = torch.remainder(x + np.pi, 2*np.pi) - np.pi
+        return y
+
 def rotate_around_center(pts, center, yaw):
     return np.dot(pts - center, 
         np.array([[np.cos(yaw), np.sin(yaw)], 
