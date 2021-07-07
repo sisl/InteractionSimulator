@@ -8,6 +8,7 @@ from intersim import Box
 from intersim import StackedVehicleTraj
 from intersim import InteractionGraph
 from intersim.utils import to_circle
+from intersim.viz.utils import build_map
 
 import gym
 from gym import error, spaces, utils
@@ -43,22 +44,25 @@ class InteractionSimulator(gym.Env):
 
     def __init__(self, 
                  svt: StackedVehicleTraj, 
-                 map_object, 
+                 map_path: str, 
                  graph: InteractionGraph = InteractionGraph(),
-                 max_acc=1.0, 
-                 reward_method='none', 
-                 observe_method='full',
+                 min_acc: float=-1.0, max_acc: float=1.0,
+                 reward_method='none', observe_method='full',
                  custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.
                  ):
         """
         Roundabout simulator.
         Args:
             svt (StackedVehicleTraj): vehicle trajectory to reference
-            map_object: underlying map object
+            map_path (str): path to map .osm file
             graph (InteractionGraph): graph depicting vehicle interactions
-            max_acc (float): maximum acceleration/deceleration
+            min_acc (float): minimum acceleration allowed
+            max_acc (float): maximum acceleration allowed
+            reward_method (str): reward type. see RewardMethod class
+            observe_method (str): observation type. see ObserveMethod class
+            custom_reward (Callable): custom reward function R(s',a) to be used w/ 'custom' reward method
         Notes:
-            action_space is [acc] ^ nvehicles
+            action_space is [min_acc,max_acc] ^ nvehicles
             state_space is [x,y,v,psi,psidot] ^ nvehicles
         """
 
@@ -69,9 +73,12 @@ class InteractionSimulator(gym.Env):
         self._state = torch.zeros(self._nv, 2) * np.nan
         self._t = svt.minT
         self._exceeded = torch.tensor([False] * self._nv)
+        self._min_acc = min_acc
         self._max_acc = max_acc
-        self._map_object = map_object
+        self._map_path = map_path
         self._map_info = self.extract_map_info()
+        self._lengths = self._svt.lengths
+        self._widths = self._svt.widths
         self._graph = graph
         self._reward_method = RewardMethod(reward_method)
         self._observe_method = ObserveMethod(observe_method)
@@ -79,7 +86,7 @@ class InteractionSimulator(gym.Env):
 
         # gym fields
         # using spaces.Box over intersim.Box
-        self.action_space = spaces.Box(low=-max_acc, high=max_acc, shape=(self._nv,1))
+        self.action_space = spaces.Box(low=min_acc, high=max_acc, shape=(self._nv,1))
         low = torch.tensor([[-np.inf,-np.inf,0.,-np.pi, -np.inf]]).expand(self._nv,5)
         high = torch.tensor([[np.inf,np.inf,np.inf,np.pi, np.inf]]).expand(self._nv,5)
         self.state_space = spaces.Box(low=low, high=high, shape=(self._nv,5))
@@ -93,8 +100,8 @@ class InteractionSimulator(gym.Env):
             'dypoly': self._svt.dypoly,
             'ddypoly': self._svt.ddypoly,
             'smax': self._svt.smax,
-            'lengths': self._svt.lengths,
-            'widths': self._svt.widths,
+            'lengths': self._lengths,
+            'widths': self._widths,
         }
         super(InteractionSimulator, self).__init__() # is this necessary??
 
@@ -170,8 +177,8 @@ class InteractionSimulator(gym.Env):
         Returns:
             map_info: information about map
         """
-        # extract map_info from self._map_object
-        return None
+        map_info, _ = build_map(self._map_path)
+        return map_info
 
     def _step(self, action):
         """
@@ -195,19 +202,17 @@ class InteractionSimulator(gym.Env):
         nna = ~torch.isnan(action[:,0]) 
         nns_na = nns & ~nna
         if torch.any(nns_na):
-            raise Exception('Time: {}. Some cars receive nan actions')
+            raise Exception('Time: {}. Some cars receive nan actions'.format(self._t))
         action[~nna] = 0.
         if not self.action_space.contains(action):
             print('Time: {}. Warning: requested action outside of bounds, being clamped'.format(self._t))
-            action = action.clamp(-self._max_acc, self._max_acc)
+            action = action.clamp(self._min_acc, self._max_acc)
 
         # euler step the state
         nextv = self._state[:,1:2] + action * self._dt
         nextv = nextv.clamp(0., np.inf) # not differentiable!
         self._state[:,0:1] = self._state[:,0:1] + 0.5*self._dt*(nextv + self._state[:,1:2])
         self._state[:,1:2] = nextv
-
-             
 
         # see which states exceeded their maxes
         self._exceeded = (self._state[:,0] > self._svt.smax) | self._exceeded

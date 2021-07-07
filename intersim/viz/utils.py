@@ -122,32 +122,25 @@ def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
 
     projector = LL2XYProjector(lat_origin, lon_origin)
 
-    e = xml.parse(filename).getroot()
-
-    point_dict = dict()
-    for node in e.findall("node"):
-        point = Point()
-        point.x, point.y = projector.latlon2xy(float(node.get('lat')), float(node.get('lon')))
-        point_dict[int(node.get('id'))] = point
+    map_info, point_dict = build_map(filename)
 
     set_visible_area(point_dict, axes)
 
     unknown_linestring_types = list()
 
-    for way in e.findall('way'):
-        way_type = get_type(way)
+    for road_element in map_info:
+        way_type = road_element['way_type']
+        way_subtype = road_element['way_subtype']
         if way_type is None:
             raise RuntimeError("Linestring type must be specified")
         elif way_type == "curbstone":
             type_dict = dict(color="black", linewidth=1, zorder=10)
         elif way_type == "line_thin":
-            way_subtype = get_subtype(way)
             if way_subtype == "dashed":
                 type_dict = dict(color="white", linewidth=1, zorder=10, dashes=[10, 10])
             else:
                 type_dict = dict(color="white", linewidth=1, zorder=10)
         elif way_type == "line_thick":
-            way_subtype = get_subtype(way)
             if way_subtype == "dashed":
                 type_dict = dict(color="white", linewidth=2, zorder=10, dashes=[10, 10])
             else:
@@ -171,8 +164,34 @@ def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
                 unknown_linestring_types.append(way_type)
             continue
 
-        x_list, y_list = get_x_y_lists(way, point_dict)
-        plt.plot(x_list, y_list, **type_dict)
+        plt.plot(road_element['x_list'], road_element['y_list'], **type_dict)
 
     if len(unknown_linestring_types) != 0:
         print("Found the following unknown types, did not plot them: " + str(unknown_linestring_types))
+
+def build_map(filename: str):
+    """
+    Build map information list
+    Args:
+        filename (str): filename
+    Returns:
+        map_info (list[dict]): list of dicts of road features, each with the following fields
+            way_type (str): way type label
+            way_subtype (str): way subtype label
+            x_list (list[float]): list of x coordinates of road feature
+            y_list (list[float]): list of y coordinates of road feature
+        point_dict (dict): dict mapping point id to Point objects in road
+    """
+    e = xml.parse(filename).getroot()
+    point_dict = dict()
+    for node in e.findall("node"):
+        point = Point()
+        point.x, point.y = projector.latlon2xy(float(node.get('lat')), float(node.get('lon')))
+        point_dict[int(node.get('id'))] = point
+    map_info = []
+    for way in e.findall('way'):
+        way_type = get_type(way)
+        way_subtype = get_subtype(way)
+        x_list, y_list = get_x_y_lists(way, point_dict)
+        map_info.append({'way_type':way_type, 'way_subtype':way_subtype,'x_list':x_list, 'y_list':y_list})
+    return map_info, point_dict
