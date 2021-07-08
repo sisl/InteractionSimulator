@@ -113,7 +113,7 @@ def set_visible_area(point_dict, axes):
     axes.set_ylim([min_y - 10, max_y + 10])
 
 
-def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
+def draw_map_without_lanelet(map_info, point_dict, axes, lat_origin, lon_origin):
 
     assert isinstance(axes, matplotlib.axes.Axes)
 
@@ -121,8 +121,6 @@ def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
     axes.patch.set_facecolor('lightgrey')
 
     projector = LL2XYProjector(lat_origin, lon_origin)
-
-    map_info, point_dict = build_map(filename)
 
     set_visible_area(point_dict, axes)
 

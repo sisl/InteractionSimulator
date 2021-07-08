@@ -2,7 +2,7 @@
 
 import torch
 import numpy as np
-
+import pickle
 from intersim.datautils import ssdot_to_simstates
 from intersim import Box
 from intersim import StackedVehicleTraj
@@ -40,7 +40,7 @@ class ObserveMethod(Enum):
 
 class InteractionSimulator(gym.Env):
     
-    metadata = {'render.modes': ['human']}
+    metadata = {'render.modes': ['live','file','post']}
 
     def __init__(self, 
                  svt: StackedVehicleTraj, 
@@ -77,6 +77,8 @@ class InteractionSimulator(gym.Env):
         self._max_acc = max_acc
         self._map_path = map_path
         self._map_info = self.extract_map_info()
+        self._xpoly = self._svt.xpoly
+        self._ypoly = self._svt.ypoly
         self._lengths = self._svt.lengths
         self._widths = self._svt.widths
         self._graph = graph
@@ -93,8 +95,8 @@ class InteractionSimulator(gym.Env):
         self.done= False
         self.info = {
             'raw_state': self._state.clone(),
-            'xpoly': self._svt.xpoly,
-            'dxpoly': self._svt.dxpoly,
+            'xpoly': self._xpoly,
+            'dxpoly': self._dxpoly,
             'ddxpoly': self._svt.ddxpoly,
             'ypoly': self._svt.ypoly,
             'dypoly': self._svt.dypoly,
@@ -103,6 +105,11 @@ class InteractionSimulator(gym.Env):
             'lengths': self._lengths,
             'widths': self._widths,
         }
+
+        # rendering fields
+        self._state_list = []
+        self._graph_list = []
+
         super(InteractionSimulator, self).__init__() # is this necessary??
 
     @property
@@ -294,18 +301,80 @@ class InteractionSimulator(gym.Env):
         """
         Reset simulation.
         Returns:
-            next_state (torch.tensor): (nvehicles*5,) next state
-            info (dict): info
         """
 
         self._state = self._svt.state0
         self._t = self._svt.minT
         self._exceeded = torch.tensor([False] * self._nv)
         self.done = False
-        return self.projected_state.reshape(-1), {'raw_state': self._state.clone()}
+        # rendering fields
+        self._state_list = []
+        self._graph_list = []
+        return None
+        #return self.projected_state.reshape(-1), {'raw_state': self._state.clone()}
 
-    def _render(self, mode='human'):
-        raise NotImplementedError
+    def _render(self, mode='post', close=False, **kwargs):
+        """
+        Render environment
+        Args:
+            mode (str): different rendering options
+                live: render a live matplotlib
+                file: save necessary information to file
+                post: save necessary information to file, and generate video upon closing
+            close (bool): whether to close environment
+            filestr (str): base file string to save states, graphs, and videos to
+        """
+        import matplotlib
+        import matplotlib.pyplot as plt
 
-    def _close(self):
-        raise NotImplementedError
+        if close:
+            if mode == 'live':
+                plt.close()
+            if mode in ['file', 'post']:
+                filestr = kwargs.get('filestr', 'render_')
+                stacked_states = torch.stack(self._state_list)
+                torch.save(stacked_states, filestr+'_states.pt')
+                pickle.dump(self._graph_list,open(filestr+'_graphs.pkl', 'wb'))
+                torch.save(self._lengths, filestr+'_lengths.pt')
+                torch.save(self._widths, filestr+'_widths.pt')
+                torch.save(self._xpoly, filestr+'_xpoly.pt')
+                torch.save(self._ypoly, filestr+'_ypoly.pt')
+                if mode == 'post':
+                    self._animate(self._osm, stacked_states, self._lengths, self._widths, 
+                                  self._graph_list, filestr, **kwargs)
+
+        if mode == 'live':
+            raise NotImplementedError
+        if mode in ['file', 'post']:
+            self._state_list.append(self.projected_state.reshape(-1))
+            self._graph_list.append(self._graph.edges)
+
+    def _animate(osm, states, lengths, widths, graphs, file, **kwargs):
+        """
+        Wrapper for animating simulation once finished
+        Args:
+            osm (str): path to .osm map file
+            states (torch.tensor): (frames, nv*5) tensor of vehicle states
+            lengths (torch.tensor): (nv,) array of vehicle lengths 
+            widths (torch.tensor): (nv,) array of vehicle widths
+            graphs (list[list[tuple]]): list of list of edges. Outer list indexes frame.
+            file (str): base file string to save animation to
+        """
+
+        import matplotlib.animation as animation
+        from intersim.viz.animatedviz import AnimatedViz
+        fps = kwargs.get('fps', 15)
+        bitrate = kwargs.get('bitrate', 1800)
+        enc = kwargs.get('encoder', 'ffmpeg')
+        iv = kwargs.get('interval', 20)
+        blit = kwargs.get('blit', True)
+
+        Writer = animation.writers[enc]
+        writer - Writer(fps=fps, bitrate=bitrate)
+        fig = plt.figure()
+        ax = plt.axes()
+        av = AnimatedViz(ax, osm, states, lengths, widths, graphs=graphs)
+        ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
+                        interval=iv, blit=blit, init_function=av.initfun,repeat=False)
+        ani.save(file='_ani.mp4', writer)
+
