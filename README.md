@@ -20,6 +20,6 @@ The INTERACTION dataset contains a two folders which should be copied into a fol
 
 ### Tests
 
-``python tests/test_idm_graph.py`` should generate a 300-timeframe-long simulation video, `idm_graph.mp4`, with an IDM policy and ClosestObstacle graph.
+``python tests/test_simulator.py`` should generate a 10-timeframe-long simulation video, `tests/output/test_simulator_ani.mp4`, with randomly sampled actions from the action space.
 
 If issues with ffmpeg and using Conda to manage environment, can resolve with ``conda install -c conda-forge ffmpeg``
