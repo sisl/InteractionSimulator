@@ -1,55 +1,38 @@
 # test_simulator.py
 
 import pandas as pd
-from intersim.datautils import df_to_stackedvehicletraj, SVT_to_simstates
-from intersim import RoundaboutSimulator
-import matplotlib.animation as animation
-from intersim.viz.animatedviz import AnimatedViz
-import matplotlib.pyplot as plt
+from intersim.utils import df_to_stackedvehicletraj
+from intersim.graphs import ConeVisibilityGraph
 
-import torch
+import gym
 
+import os
+opj = os.path.join
 def main():
 
     # load a trackfile
-    df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+    #df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+    #osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
+    #svt = df_to_stackedvehicletraj(df)
+    outdir  = opj('tests','output')
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
+    filestr = opj(outdir,'test_simulator')
+    #import pdb
+    #pdb.set_trace()
+    cvg = ConeVisibilityGraph(r=20, half_angle=120)
+    env = gym.make('intersim:intersim-v0', graph=cvg)
 
-    stv = df_to_stackedvehicletraj(df)
-
-    sim = RoundaboutSimulator(stv)
-
-    states = []
-    s,_ = sim.reset()
-    s = s.reshape(-1,5)
-    states.append(s)
-
-    for i in range(100):
-        v = s[:,2:3]
-        s,_ = sim.step(0.5*(5.-v))
-
-        s = s.reshape(-1,5)
-
-        states.append(s)
-
-    states = torch.stack(states).reshape(101,-1)
-
-    fig = plt.figure()
-    ax = plt.axes(
-        xlim=(900, 1100), ylim=(900, 1100)
-        )
-    ax.set_aspect('equal', 'box')
-
-    osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
-
-    av = AnimatedViz(ax, osm, states, stv.lengths, stv.widths)
-
-    ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                   interval=20, blit=True, init_func=av.initfun, 
-                   repeat=True)
-
-    plt.show()
-
-
+    env.reset()
+    done = False
+    n_frames = 10
+    i = 0
+    while not done and i < n_frames:
+        env.render()
+        ob, r, done, info = env.step(env.action_space.sample())
+        i+=1
+    env.render()
+    env.close(filename=filestr)
 
 
 if __name__ == '__main__':
