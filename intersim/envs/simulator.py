@@ -366,7 +366,7 @@ class InteractionSimulator(gym.Env):
             import matplotlib.pyplot as plt
             plt.close()
         if self._mode in ['file', 'post']:
-            filestr = kwargs.get('filestr', 'render_')
+            filestr = kwargs.get('filestr', 'render')
             stacked_states = torch.stack(self._state_list)
             torch.save(stacked_states, filestr+'_states.pt')
             pickle.dump(self._graph_list,open(filestr+'_graphs.pkl', 'wb'))

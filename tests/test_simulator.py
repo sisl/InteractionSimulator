@@ -32,7 +32,7 @@ def main():
         ob, r, done, info = env.step(env.action_space.sample())
         i+=1
     env.render()
-    env.close(filename=filestr)
+    env.close(filestr=filestr)
 
 
 if __name__ == '__main__':
