@@ -14,20 +14,6 @@ import math
 
 from intersim.viz.dict_utils import *
 
-
-def to_circle(self, x):
-        """
-        Casts x (in rad) to [-pi, pi)
-        
-        Args:
-            x (torch.tensor): (*) input angles (radians)
-            
-        Returns:
-            y (torch.tensor): (*) x cast to [-pi, pi)
-        """
-        y = torch.remainder(x + np.pi, 2*np.pi) - np.pi
-        return y
-
 def rotate_around_center(pts, center, yaw):
     return np.dot(pts - center, 
         np.array([[np.cos(yaw), np.sin(yaw)], 
@@ -113,14 +99,12 @@ def set_visible_area(point_dict, axes):
     axes.set_ylim([min_y - 10, max_y + 10])
 
 
-def draw_map_without_lanelet(map_info, point_dict, axes, lat_origin, lon_origin):
+def draw_map_without_lanelet(map_info, point_dict, axes):
 
     assert isinstance(axes, matplotlib.axes.Axes)
 
     axes.set_aspect('equal', adjustable='box')
     axes.patch.set_facecolor('lightgrey')
-
-    projector = LL2XYProjector(lat_origin, lon_origin)
 
     set_visible_area(point_dict, axes)
 
@@ -167,11 +151,13 @@ def draw_map_without_lanelet(map_info, point_dict, axes, lat_origin, lon_origin)
     if len(unknown_linestring_types) != 0:
         print("Found the following unknown types, did not plot them: " + str(unknown_linestring_types))
 
-def build_map(filename: str):
+def build_map(filename: str, lat_origin: float = 0., lon_origin: float = 0.):
     """
     Build map information list
     Args:
         filename (str): filename
+        lat_origin (float): origin latitude for projector
+        lon_origin (float): origin longitude for projector
     Returns:
         map_info (list[dict]): list of dicts of road features, each with the following fields
             way_type (str): way type label
@@ -180,6 +166,7 @@ def build_map(filename: str):
             y_list (list[float]): list of y coordinates of road feature
         point_dict (dict): dict mapping point id to Point objects in road
     """
+    projector = LL2XYProjector(lat_origin, lon_origin)
     e = xml.parse(filename).getroot()
     point_dict = dict()
     for node in e.findall("node"):

@@ -1,5 +1,5 @@
 # graph.py
-
+from typing import List
 class InteractionGraph:
     
     def __init__(self, neighbor_dict: dict={}):
@@ -15,7 +15,7 @@ class InteractionGraph:
         pass
     
     @classmethod
-    def from_edges(cls, nodes: list[int], edges: list[tuple], *args, **kwargs):
+    def from_edges(cls, nodes: List[int], edges: List[tuple], *args, **kwargs):
         """
         Instantiate interaction graph from number of nodes and edges
 

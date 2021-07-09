@@ -1,13 +1,12 @@
 # simulator.py
 
+from enum import Enum
+
 import torch
 import numpy as np
 import pickle
-from intersim.datautils import ssdot_to_simstates
-from intersim import Box
-from intersim import StackedVehicleTraj
-from intersim import InteractionGraph
-from intersim.utils import to_circle
+from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt
+from intersim import Box, StackedVehicleTraj, InteractionGraph
 from intersim.viz.utils import build_map
 
 import gym
@@ -17,7 +16,7 @@ from gym.utils import seeding
 import logging
 logger = logging.getLogger(__name__)
 
-from collections.abc import Callable
+from typing import Callable
 
 class RewardMethod(Enum):
     """
@@ -43,8 +42,10 @@ class InteractionSimulator(gym.Env):
     metadata = {'render.modes': ['live','file','post']}
 
     def __init__(self, 
-                 svt: StackedVehicleTraj, 
-                 map_path: str, 
+                 loc: int = 0,
+                 track: int = 0,
+                 svt: StackedVehicleTraj = None, 
+                 map_path: str = None, 
                  graph: InteractionGraph = InteractionGraph(),
                  min_acc: float=-1.0, max_acc: float=1.0,
                  reward_method='none', observe_method='full',
@@ -53,6 +54,8 @@ class InteractionSimulator(gym.Env):
         """
         Roundabout simulator.
         Args:
+            loc (int): location index of scene
+            track (into): track number of scene
             svt (StackedVehicleTraj): vehicle trajectory to reference
             map_path (str): path to map .osm file
             graph (InteractionGraph): graph depicting vehicle interactions
@@ -66,7 +69,19 @@ class InteractionSimulator(gym.Env):
             state_space is [x,y,v,psi,psidot] ^ nvehicles
         """
 
-        # simulator fields
+        # Get stacked vehicle trajectory
+        if not svt:
+            svt, filename = get_svt(loc, track)
+            print('Vehicle Trajectory Paths: {}'.format(filename))
+        else:
+            print('Custom Vehicle Trajectory Paths')
+            
+        # Get map path
+        if not map_path:
+            map_path = get_map_path(loc)
+        print('Map Path: {}'.format(map_path))
+        
+        # simulator fields 
         self._nv = svt.nv
         self._dt = svt.dt
         self._svt = svt
@@ -82,23 +97,24 @@ class InteractionSimulator(gym.Env):
         self._lengths = self._svt.lengths
         self._widths = self._svt.widths
         self._graph = graph
+        self._graph.update_graph(self.projected_state)
         self._reward_method = RewardMethod(reward_method)
         self._observe_method = ObserveMethod(observe_method)
         self._custom_reward = custom_reward
 
         # gym fields
-        # using spaces.Box over intersim.Box
-        self.action_space = spaces.Box(low=min_acc, high=max_acc, shape=(self._nv,1))
+        # using intersim.Box over spaces.Box for pytorch
+        self.action_space = Box(low=min_acc, high=max_acc, shape=(self._nv,1))
         low = torch.tensor([[-np.inf,-np.inf,0.,-np.pi, -np.inf]]).expand(self._nv,5)
         high = torch.tensor([[np.inf,np.inf,np.inf,np.pi, np.inf]]).expand(self._nv,5)
-        self.state_space = spaces.Box(low=low, high=high, shape=(self._nv,5))
+        self.state_space = Box(low=low, high=high, shape=(self._nv,5))
         self.done= False
         self.info = {
             'raw_state': self._state.clone(),
             'xpoly': self._xpoly,
-            'dxpoly': self._dxpoly,
+            'dxpoly': self._svt.dxpoly,
             'ddxpoly': self._svt.ddxpoly,
-            'ypoly': self._svt.ypoly,
+            'ypoly': self._ypoly,
             'dypoly': self._svt.dypoly,
             'ddypoly': self._svt.ddypoly,
             'smax': self._svt.smax,
@@ -157,7 +173,10 @@ class InteractionSimulator(gym.Env):
         return projstate
 
     @property
-    def relative_state(self, projstate):
+    def relative_state(self):
+        return self._relative_state(self.projected_state)
+
+    def _relative_state(self, projstate):
         """
         Compute relative state information from [x,y,v,psi,psidot] projected state
         Args:
@@ -165,7 +184,7 @@ class InteractionSimulator(gym.Env):
         Returns:
             relstate (torch.tensor): (nv, nv, 5) projected state, where relstate[i,j,k] = projstate[j,k] - projstate[i,k]
         """
-        relstate = projstate.unsqueeze(0) - projstate.unsqeeze(1)
+        relstate = projstate.unsqueeze(0) - projstate.unsqueeze(1)
         relstate[...,3:5] = to_circle(relstate[...,3:5])
         return relstate
     
@@ -187,7 +206,7 @@ class InteractionSimulator(gym.Env):
         map_info, _ = build_map(self._map_path)
         return map_info
 
-    def _step(self, action):
+    def step(self, action):
         """
         Step simulation forward 1 time-step.
         Args:
@@ -224,7 +243,7 @@ class InteractionSimulator(gym.Env):
         # see which states exceeded their maxes
         self._exceeded = (self._state[:,0] > self._svt.smax) | self._exceeded
         self._state[self._exceeded] = np.nan
-        self.done = episode_over
+        self.done = torch.all(self._exceeded)
 
         # see which new vehicles should spawn
         
@@ -243,13 +262,13 @@ class InteractionSimulator(gym.Env):
         self._graph.update_graph(projstate)
 
         # generate info
-        self.info.update(
-            'exceeded':np.argwhere(self._exceeded.detach().numpy()).flatten(),
+        self.info.update({
+            'exceeded': np.argwhere(self._exceeded.detach().numpy()).flatten(),
             'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
             'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
-            'raw_state': self._state.clone()
+            'raw_state': self._state.clone(),
             'action_taken': action.clone()
-        )
+        })
 
         # generate observation
         ob = self._get_observation(projstate)
@@ -258,7 +277,7 @@ class InteractionSimulator(gym.Env):
         reward = self._get_reward(projstate, action)
         return ob, reward, self.done, self.info   
     
-    def _get_observation(next_state):
+    def _get_observation(self, next_state):
         """
         Generate observation
         Args:
@@ -275,13 +294,13 @@ class InteractionSimulator(gym.Env):
         observation['state'] = next_state.reshape(-1)
         observation['neighbor_dict'] = self._graph.neighbor_dict
         if self._observe_method in [ObserveMethod.FULL, ObserveMethod.HIDDEN]:
-            observation['relative_state'] = self.relative_state(next_state)
+            observation['relative_state'] = self._relative_state(next_state)
             observation['map_info'] = self.map_info
         if self._observe_method in [ObserveMethod.HIDDEN]:
             observation['hidden_info'] = self.info
         return observation
     
-    def _get_reward(next_state, action) -> float:
+    def _get_reward(self, next_state, action) -> float:
         """
         Generate reward
         Args:
@@ -297,7 +316,7 @@ class InteractionSimulator(gym.Env):
         else:
             raise ValueError('Invalid reward method')
 
-    def _reset(self):
+    def reset(self):
         """
         Reset simulation.
         Returns:
@@ -306,14 +325,17 @@ class InteractionSimulator(gym.Env):
         self._state = self._svt.state0
         self._t = self._svt.minT
         self._exceeded = torch.tensor([False] * self._nv)
+        self._graph.update_graph(self.projected_state)
         self.done = False
+
         # rendering fields
         self._state_list = []
         self._graph_list = []
+        print('Environment Reset')
         return None
         #return self.projected_state.reshape(-1), {'raw_state': self._state.clone()}
 
-    def _render(self, mode='post', close=False, **kwargs):
+    def render(self, mode='post'):
         """
         Render environment
         Args:
@@ -321,35 +343,42 @@ class InteractionSimulator(gym.Env):
                 live: render a live matplotlib
                 file: save necessary information to file
                 post: save necessary information to file, and generate video upon closing
-            close (bool): whether to close environment
             filestr (str): base file string to save states, graphs, and videos to
         """
-        import matplotlib
-        import matplotlib.pyplot as plt
-
-        if close:
-            if mode == 'live':
-                plt.close()
-            if mode in ['file', 'post']:
-                filestr = kwargs.get('filestr', 'render_')
-                stacked_states = torch.stack(self._state_list)
-                torch.save(stacked_states, filestr+'_states.pt')
-                pickle.dump(self._graph_list,open(filestr+'_graphs.pkl', 'wb'))
-                torch.save(self._lengths, filestr+'_lengths.pt')
-                torch.save(self._widths, filestr+'_widths.pt')
-                torch.save(self._xpoly, filestr+'_xpoly.pt')
-                torch.save(self._ypoly, filestr+'_ypoly.pt')
-                if mode == 'post':
-                    self._animate(self._osm, stacked_states, self._lengths, self._widths, 
-                                  self._graph_list, filestr, **kwargs)
+        self._mode = mode # latest mode
 
         if mode == 'live':
+            import matplotlib
+            import matplotlib.pyplot as plt
             raise NotImplementedError
         if mode in ['file', 'post']:
             self._state_list.append(self.projected_state.reshape(-1))
             self._graph_list.append(self._graph.edges)
 
-    def _animate(osm, states, lengths, widths, graphs, file, **kwargs):
+    def close(self, **kwargs):
+        """
+        Clean up the environment
+        Args:
+            filestr (str): base file string to save states, graphs, and videos to
+        """ 
+        if self._mode == 'live':
+            import matplotlib
+            import matplotlib.pyplot as plt
+            plt.close()
+        if self._mode in ['file', 'post']:
+            filestr = kwargs.get('filestr', 'render_')
+            stacked_states = torch.stack(self._state_list)
+            torch.save(stacked_states, filestr+'_states.pt')
+            pickle.dump(self._graph_list,open(filestr+'_graphs.pkl', 'wb'))
+            torch.save(self._lengths, filestr+'_lengths.pt')
+            torch.save(self._widths, filestr+'_widths.pt')
+            torch.save(self._xpoly, filestr+'_xpoly.pt')
+            torch.save(self._ypoly, filestr+'_ypoly.pt')
+            if self._mode == 'post':
+                self._animate(self._map_path, stacked_states, self._lengths, self._widths, 
+                                self._graph_list, filestr, **kwargs)
+
+    def _animate(self, osm, states, lengths, widths, graphs, file, **kwargs):
         """
         Wrapper for animating simulation once finished
         Args:
@@ -360,7 +389,8 @@ class InteractionSimulator(gym.Env):
             graphs (list[list[tuple]]): list of list of edges. Outer list indexes frame.
             file (str): base file string to save animation to
         """
-
+        import matplotlib
+        import matplotlib.pyplot as plt
         import matplotlib.animation as animation
         from intersim.viz.animatedviz import AnimatedViz
         fps = kwargs.get('fps', 15)
@@ -370,11 +400,11 @@ class InteractionSimulator(gym.Env):
         blit = kwargs.get('blit', True)
 
         Writer = animation.writers[enc]
-        writer - Writer(fps=fps, bitrate=bitrate)
+        writer = Writer(fps=fps, bitrate=bitrate)
         fig = plt.figure()
         ax = plt.axes()
         av = AnimatedViz(ax, osm, states, lengths, widths, graphs=graphs)
         ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                        interval=iv, blit=blit, init_function=av.initfun,repeat=False)
-        ani.save(file='_ani.mp4', writer)
+                        interval=iv, blit=blit, init_func=av.initfun,repeat=False)
+        ani.save(file+'_ani.mp4', writer)
 

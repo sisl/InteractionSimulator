@@ -56,12 +56,13 @@ class AnimatedViz:
     def initfun(self):
         ax = self._ax 
 
-        draw_map_without_lanelet(self._map_info, self._point_dict, ax, 0.,0.)
+        draw_map_without_lanelet(self._map_info, self._point_dict, ax)
 
         # init car patches
         carrects = []
         car_colors = ['r']*self._nv
-        car_colors = cm.cmap(np.linspace(0,1,num=self._nv))
+        cmap = cm.get_cmap('jet')
+        car_colors = cmap(np.linspace(0,1,num=self._nv))
         np.random.shuffle(car_colors)
         for i in range(self._nv):
             rectpts = np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])
