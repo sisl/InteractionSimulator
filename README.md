@@ -9,7 +9,7 @@ Install requirements with pip
 
 ```
 pip install -r requirements.txt
-export PYTHONPATH=$(pwd):$PYTHONPATH
+pip install -e .
 ```
 
 ### Dataset
