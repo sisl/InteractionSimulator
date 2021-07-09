@@ -1,17 +1,16 @@
 # animatedviz.py
 
 import matplotlib
+from matplotlib import cm
 import matplotlib.patches
 import matplotlib.transforms
 from numpy import pi
 import numpy as np
 import torch
 
-import matplotlib.animation as animation
-
 import matplotlib.pyplot as plt
 
-from intersim.viz.utils import batched_rotate_around_center, draw_map_without_lanelet
+from intersim.viz.utils import batched_rotate_around_center, draw_map_without_lanelet, build_map
 
 import os
 
@@ -40,6 +39,7 @@ class AnimatedViz:
 
         self._ax = ax
         self._osm = osm
+        self._map_info, self._point_dict = build_map(osm)
         self._x = states[...,0].detach().numpy()
         self._y = states[...,1].detach().numpy()
         self._psi = states[...,3].detach().numpy()
@@ -56,14 +56,17 @@ class AnimatedViz:
     def initfun(self):
         ax = self._ax 
 
-        draw_map_without_lanelet(self._osm, ax, 0.,0.)
+        draw_map_without_lanelet(self._map_info, self._point_dict, ax)
 
         # init car patches
         carrects = []
-
+        car_colors = ['r']*self._nv
+        cmap = cm.get_cmap('jet')
+        car_colors = cmap(np.linspace(0,1,num=self._nv))
+        np.random.shuffle(car_colors)
         for i in range(self._nv):
             rectpts = np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])
-            rect = matplotlib.patches.Polygon(rectpts, closed=True, color='r', zorder=0.2)
+            rect = matplotlib.patches.Polygon(rectpts, closed=True, color=car_colors[i], zorder=0.2)
             ax.add_patch(rect)
             carrects.append(rect)
         self._carrects = carrects

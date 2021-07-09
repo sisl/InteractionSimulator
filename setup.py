@@ -7,8 +7,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="InteractionSimulator",
-    version="0.0.1",
+    name="intersim",
+    version="0.0.2",
     packages=find_packages(),
     description="Simulator environment for INTERACTION driving dataset",
     long_description=long_description,
@@ -29,7 +29,7 @@ setup(
         "gym",
         "future",
         "sklearn",
-        "pyproj
+        "pyproj",
         "pytest",
     ],    
     python_requires=">=3.6",

@@ -1,8 +1,8 @@
 # graph.py
-
+from typing import List
 class InteractionGraph:
     
-    def __init__(self, neighbor_dict={}):
+    def __init__(self, neighbor_dict: dict={}):
         self._neighbor_dict = neighbor_dict
     
     def update_graph(self, x):
@@ -10,10 +10,27 @@ class InteractionGraph:
         Update the neighbor dict given a new state.
         
         Args:
-            x (torch.tensor): (nv*5,) vehicle states
+            x (torch.tensor): (nv,5) vehicle states
         """
-        raise NotImplementedError
+        pass
     
+    @classmethod
+    def from_edges(cls, nodes: List[int], edges: List[tuple], *args, **kwargs):
+        """
+        Instantiate interaction graph from number of nodes and edges
+
+        Args:
+            nodes (list[int]): list of active node indices
+            edges (list[tuple]): list of directed edges in graph
+        """
+        neighbor_dict = {i:[] for i in nodes} 
+        for (i,j) in edges:
+                assert i in nodes, "node {} from edge {} not present in active nodes list".format(i, (i,j))
+                assert j in nodes, "node {} from edge {} not present in active nodes list".format(j, (i,j))
+                if j not in neighbor_dict[i]:
+                    neighbor_dict[i].append(j)
+        return cls(*args, neighbor_dict=neighbor_dict, **kwargs)
+
     @property
     def neighbor_dict(self):
         return self._neighbor_dict.copy()
@@ -81,7 +98,7 @@ class InteractionGraph:
         return sccs
             
         
-    def DFS(self, node, neighbor_dict, start, fin, tree):
+    def DFS(self, node: int, neighbor_dict: dict, start: dict, fin: dict, tree: list):
         """
         Perform a depth-first search of a subtree.
         Args:

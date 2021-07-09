@@ -1,12 +1,64 @@
-# datautils.py
+# utils.py
 
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import Lasso
 import torch
 from intersim.vehicletraj import StackedVehicleTraj
+import warnings
+warnings.simplefilter('ignore', np.RankWarning)
 
 torch.set_default_dtype(torch.float64)
+import os
+opj = os.path.join
+
+LOCATIONS = [
+    'DR_USA_Roundabout_FT',
+    'DR_CHN_Roundabout_LN',
+    'DR_DEU_Roundabout_OF',
+    'DR_USA_Roundabout_EP',
+    'DR_USA_Roundabout_SR'
+]
+MAX_TRACKS=5
+def get_map_path(loc: int) -> str:
+    """
+    Get path to .osm map file from location index
+    Args:
+        loc (int): location index
+    Returns:
+        osm (str): path to .osm map file
+    """
+    assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
+    return opj('datasets','maps',LOCATIONS[loc]+'.osm')
+
+def get_svt(loc: int, track: int):
+    """
+    Load stacked vehicle trajectory from location and track indices
+    Args:
+        loc (int): location index
+        track (int): track index
+    Returns:
+        svt (StackedVehicleTraj): stacked vehicle traj to base trajectories off of
+        path (str): path to data used
+    """
+    assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
+    assert track >= 0 and track < MAX_TRACKS, "Invalid location index {} not in [0,{}]".format(track,MAX_TRACKS-1)
+    path = opj('datasets','trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
+    df = pd.read_csv(path)
+    stv = df_to_stackedvehicletraj(df)
+    return stv, path
+
+def to_circle(x):
+        """
+        Casts x (in rad) to [-pi, pi)
+        
+        Args:
+            x (torch.tensor): (*) input angles (radians)
+            
+        Returns:
+            y (torch.tensor): (*) x cast to [-pi, pi)
+        """
+        y = torch.remainder(x + np.pi, 2*np.pi) - np.pi
+        return y
 
 def powerseries(x, deg):
 
@@ -137,9 +189,6 @@ def ssdot_to_simstates(s, sdot,
     simstates[...,4] = psidot
 
     return simstates.reshape(T, -1)
-
-
-
 
 def SVT_to_simstates(svt):
     """

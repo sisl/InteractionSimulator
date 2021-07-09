@@ -2,7 +2,7 @@
 
 import torch
 from torch import nn
-from intersim.graph import InteractionGraph
+from intersim import InteractionGraph
 import numpy as np
 
 class ClosestObstacleGraph(InteractionGraph):
@@ -25,13 +25,11 @@ class ClosestObstacleGraph(InteractionGraph):
         Update the neighbor dict given a new state.
         
         Args:
-            state (torch.tensor): (nv*5,) vehicle states
+            state (torch.tensor): (nv,5) vehicle states
         """
         ndim = state.ndim
-        assert ndim==1, "Improper state size to graph updater"
-        
-        state = state.reshape(-1, 5)
-        nv = state.shape[-2]
+        assert ndim==2, "Improper state size to graph updater"
+        nv = state.shape[0]
         
         x = state[...,0:1]
         y = state[...,1:2]
