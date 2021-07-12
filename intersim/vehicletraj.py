@@ -4,6 +4,7 @@ import numpy as np
 from numpy.polynomial.polynomial import Polynomial as P
 from numpy.polynomial.polynomial import polyder
 import torch
+import random
 
 class StackedVehicleTraj:
 
@@ -79,6 +80,31 @@ class StackedVehicleTraj:
 				state0[i,1] = v[i][0]
 
 		self._state0 = state0
+		self._shuffled = False
+
+	def shuffle_tracks(self, seed: int = None):
+		self._shuffled = True
+		if seed:
+			random.seed(seed)
+		self._shuffle_idx = list(range(self._nv))
+		random.shuffle(self._shuffle_idx)
+
+		# update stored values based on self._shuffle_idx
+		self._lengths = self._lengths[self._shuffle_idx]
+		self._widths = self._widths[self._shuffle_idx]
+		self._s = [self._s[i] for i in self._shuffle_idx]
+		self._v = [self._v[i] for i in self._shuffle_idx]
+		self._t0 = self._t0 # [self._shuffle_idx] DO NOT SHUFFLE TIME
+		# TODO: make shuffled start_times random
+		self._v0 = self._v0[self._shuffle_idx]
+		self._smax = self._smax[self._shuffle_idx]
+		
+		self._xpoly = self._xpoly[self._shuffle_idx]
+		self._ypoly = self._ypoly[self._shuffle_idx]
+		self._dxpoly = self._dxpoly[self._shuffle_idx]
+		self._dypoly = self._dypoly[self._shuffle_idx]
+		self._ddxpoly = self._ddxpoly[self._shuffle_idx]
+		self._ddypoly = self._ddypoly[self._shuffle_idx]
 
 	@property
 	def state0(self):

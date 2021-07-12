@@ -49,7 +49,8 @@ class InteractionSimulator(gym.Env):
                  graph: InteractionGraph = InteractionGraph(),
                  min_acc: float=-1.0, max_acc: float=1.0,
                  reward_method='none', observe_method='full',
-                 custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.
+                 custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.,
+                 shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0
                  ):
         """
         Roundabout simulator.
@@ -64,6 +65,8 @@ class InteractionSimulator(gym.Env):
             reward_method (str): reward type. see RewardMethod class
             observe_method (str): observation type. see ObserveMethod class
             custom_reward (Callable): custom reward function R(s',a) to be used w/ 'custom' reward method
+            shuffle_tracks (bool): whether to shuffle to vehicle tracks
+            shuffle_tracks_seed (int): seed to use when shuffling the tracks
         Notes:
             action_space is [min_acc,max_acc] ^ nvehicles
             state_space is [x,y,v,psi,psidot] ^ nvehicles
@@ -81,6 +84,12 @@ class InteractionSimulator(gym.Env):
             map_path = get_map_path(loc)
         print('Map Path: {}'.format(map_path))
         
+        # shuffle tracks
+        self._shuffle_tracks = shuffle_tracks
+        self._shuffle_tracks_seed = shuffle_tracks_seed
+        if self._shuffle_tracks:
+            svt = svt.shuffle_tracks(seed = shuffle_tracks_seed)
+
         # simulator fields 
         self._nv = svt.nv
         self._dt = svt.dt
