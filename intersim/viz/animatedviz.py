@@ -21,7 +21,7 @@ def animate(osm, states, lengths, widths, graphs=None, filestr='render', **kwarg
     Wrapper for animating simulation once finished
     Args:
         osm (str): path to .osm map file
-        states (torch.tensor): (frames, nv*5) tensor of vehicle states
+        states (torch.tensor): (frames, nv, 5) tensor of vehicle states
         lengths (torch.tensor): (nv,) array of vehicle lengths 
         widths (torch.tensor): (nv,) array of vehicle widths
         graphs (list[list[tuple]]): list of list of edges. Outer list indexes frame.
@@ -52,16 +52,15 @@ class AnimatedViz:
         Args:
             ax (plt.Axis): matplotlib Axis
             osm (str): osm file name
-            states (torch.tensor): (T, nv*5) states
+            states (torch.tensor): (T, nv, 5) states
             lengths (torch.tensor): (nv,) car lengths
             widths (torch.tensor): (nv,) car widths
             graphs (list of list of tuples): graphs[i][j] is the jth edge tuple in the ith frame
         ''' 
 
+        assert states.ndim == 3, 'Invalid state dim {} in AnimatedViz. Should be (T, nv, 5)'.format(states.shape)
         self._T = states.shape[0]
-        self._nv = states.shape[1] // 5
-
-        states = states.reshape(self._T,self._nv,5)
+        self._nv = states.shape[1]
 
         self._ax = ax
         self._osm = osm

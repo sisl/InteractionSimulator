@@ -188,7 +188,7 @@ def ssdot_to_simstates(s, sdot,
     simstates[...,3] = psi
     simstates[...,4] = psidot
 
-    return simstates.reshape(T, -1)
+    return simstates
 
 def SVT_to_simstates(svt):
     """
@@ -196,7 +196,7 @@ def SVT_to_simstates(svt):
     Args:
         svt (StackedVehicleTrajectory): stacked vehicle trajectory
     Returns:
-        simstates (torch.tensor): (svt.Tind, svt.nv * 5) states
+        simstates (torch.tensor): (svt.Tind, svt.nv, 5) states
     """
 
     sims = torch.ones(svt.Tind, svt.nv) * np.nan
@@ -216,7 +216,7 @@ def SVT_to_simstates(svt):
                                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
 
-    return simstates.reshape(svt.Tind, -1)
+    return simstates
 
 
 

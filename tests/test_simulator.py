@@ -10,16 +10,11 @@ import os
 opj = os.path.join
 def main():
 
-    # load a trackfile
-    #df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
-    #osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
-    #svt = df_to_stackedvehicletraj(df)
     outdir  = opj('tests','output')
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
     filestr = opj(outdir,'test_simulator')
-    #import pdb
-    #pdb.set_trace()
+
     cvg = ConeVisibilityGraph(r=20, half_angle=120)
     env = gym.make('intersim:intersim-v0', graph=cvg)
 

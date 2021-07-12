@@ -168,7 +168,7 @@ class InteractionSimulator(gym.Env):
         projstate = ssdot_to_simstates(self._state[:,0].unsqueeze(0),self._state[:,1].unsqueeze(0),
                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
-        projstate = projstate[0].reshape(self._nv, 5)
+        projstate = projstate[0]
         projstate[...,3:5] = to_circle(projstate[...,3:5])
         return projstate
 
@@ -284,14 +284,14 @@ class InteractionSimulator(gym.Env):
             next_state (torch.tensor): (nv,5) projected next state
         Returns:
             observation (dict): observation with following potential keys
-                state (torch.tensor): (nv*5,) projected next state
+                state (torch.tensor): (nv,5) projected next state
                 neighbor_dict (dict): interaction graph neighbor dictionary
                 relative_state (torch.tensor): (nv,nv,5) relative state information where [i,j,k] encodes state[j,k] - state[i,k]
                 map_info: map information embedding
                 hidden_info: external information that would usually stay hidden for training
         """
         observation = {}
-        observation['state'] = next_state.reshape(-1)
+        observation['state'] = next_state
         observation['neighbor_dict'] = self._graph.neighbor_dict
         if self._observe_method in [ObserveMethod.FULL, ObserveMethod.HIDDEN]:
             observation['relative_state'] = self._relative_state(next_state)
@@ -352,7 +352,7 @@ class InteractionSimulator(gym.Env):
             import matplotlib.pyplot as plt
             raise NotImplementedError
         if mode in ['file', 'post']:
-            self._state_list.append(self.projected_state.reshape(-1))
+            self._state_list.append(self.projected_state)
             self._graph_list.append(self._graph.edges)
 
     def close(self, **kwargs):
