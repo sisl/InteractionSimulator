@@ -47,7 +47,7 @@ class InteractionSimulator(gym.Env):
                  svt: StackedVehicleTraj = None, 
                  map_path: str = None, 
                  graph: InteractionGraph = InteractionGraph(),
-                 min_acc: float=-1.0, max_acc: float=1.0,
+                 min_acc: float=-10.0, max_acc: float=10.0,
                  reward_method='none', observe_method='full',
                  custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.,
                  shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0
@@ -262,7 +262,7 @@ class InteractionSimulator(gym.Env):
 
         # for now, just spawn them
         spawned = should_spawn
-        self._state[spawned,0] = 0.001 # done to avoid potential DivByZero
+        self._state[spawned,0] = 0.
         self._state[spawned,1] = self._svt.v0[spawned]
         
         projstate = self.projected_state

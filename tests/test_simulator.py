@@ -1,6 +1,5 @@
 # test_simulator.py
 
-import pandas as pd
 from intersim.utils import df_to_stackedvehicletraj
 from intersim.graphs import ConeVisibilityGraph
 

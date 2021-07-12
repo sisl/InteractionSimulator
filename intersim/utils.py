@@ -159,7 +159,7 @@ def ssdot_to_simstates(s, sdot,
         s (torch.tensor): (T,nv) arc lengths
         sdot (torch.tensor): (T,nv) velocities
     Returns:
-        simstates (torch.tensor): (T, nv * 5) states
+        simstates (torch.tensor): (T, nv, 5) states
     """
 
     nv = xpoly.shape[0]
@@ -190,13 +190,45 @@ def ssdot_to_simstates(s, sdot,
 
     return simstates
 
-def SVT_to_simstates(svt):
+def ssdot_to_simactions(s, sdot, dt=0.1):
     """
-    Converts a StackedVehicleTrajectory into Simulator states
+    Maps s, sdot to accelerations taken in between.
+    Args:
+        s (torch.tensor): (T,nv) arc lengths
+        sdot (torch.tensor): (T,nv) velocities
+    Returns:
+        simactions (torch.tensor): (T-1, nv, 1) actions, taken in between states
+    """
+    # sdot(t+1) = sdot(t) + dt * a(t)
+    # s(t+1) = s(t) +  0.5 * dt * (sdot(t+1) + sdot(t)) = s(t) + dt * sdot(t) + 0.5 * dt^2 * a(t)
+
+    T, nv = s.shape
+    # Get a from s, ignore sdot, except for sdot(0) (this is what simulator does anyway) 
+    # TODO: filter accelerations better (e.g. states and velocities rather than just states)
+    # TODO: vectorize 
+    adj_sdot = sdot.clone()
+    simactions = torch.zeros(T-1, nv, 1) # * np.nan
+    for car in range(nv):
+        for t in range(T-1):
+            if np.isnan(s[t,car]) or np.isnan(s[t+1,car]):
+                continue
+            a = 2 * (s[t+1,car] - s[t,car] - (dt * adj_sdot[t,car])) / (dt**2)
+            if abs(a) > 1:
+                pass
+                #import pdb
+                #pdb.set_trace()
+            simactions[t,car,0] = a
+            adj_sdot[t+1,car] = adj_sdot[t,car] + dt * simactions[t,car,0]
+    return simactions
+
+def SVT_to_sim_stateactions(svt):
+    """
+    Converts a StackedVehicleTrajectory into Simulator state and actions
     Args:
         svt (StackedVehicleTrajectory): stacked vehicle trajectory
     Returns:
-        simstates (torch.tensor): (svt.Tind, svt.nv, 5) states
+        simstates (torch.tensor): (T, nv, 5) states
+        simactions (torch.tensor): (T-1, nv, 1) actions
     """
 
     sims = torch.ones(svt.Tind, svt.nv) * np.nan
@@ -211,12 +243,13 @@ def SVT_to_simstates(svt):
 
         sims[ti:ti+len(si), i] = si
         simv[ti:ti+len(vi), i] = vi
-
+    
     simstates = ssdot_to_simstates(sims, simv, 
                                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
+    simactions = ssdot_to_simactions(sims, simv, dt=svt.dt)
 
-    return simstates
+    return simstates, simactions
 
 
 
