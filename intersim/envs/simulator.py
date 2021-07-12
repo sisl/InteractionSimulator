@@ -99,7 +99,7 @@ class InteractionSimulator(gym.Env):
         self._dt = svt.dt
         self._svt = svt
         self._state = torch.zeros(self._nv, 2) * np.nan
-        self._t = svt.minT
+        self._ind = 0
         self._exceeded = torch.tensor([False] * self._nv)
         self._stop_on_collision = stop_on_collision
         self._min_acc = min_acc
@@ -141,6 +141,15 @@ class InteractionSimulator(gym.Env):
         self._graph_list = []
 
         super(InteractionSimulator, self).__init__() # is this necessary??
+
+    @property
+    def t(self):
+        """
+        Returns time
+        Returns:
+            t (float): simulation time
+        """
+        return self._svt.minT + self._dt * self._ind
 
     @property
     def state(self):
@@ -231,11 +240,11 @@ class InteractionSimulator(gym.Env):
             episode_over (bool): whether the episode has ended
             info (dict): diagnostic information useful for debugging
         """
-
         assert not self.done, "Simulation has ended and must be reset"
-
-        self._t += self._dt
-
+        action = action.clone()
+        prev_state = self.projected_state.clone()
+        self._ind += 1
+        t = self.t
         # check for proper action input
         # 1) make sure all non-nan states have actions
         # 2) set actions for all nan state to 0
@@ -245,10 +254,10 @@ class InteractionSimulator(gym.Env):
         nna = ~torch.isnan(action[:,0]) 
         nns_na = nns & ~nna
         if torch.any(nns_na):
-            raise Exception('Time: {}. Some cars receive nan actions'.format(self._t))
+            raise Exception('Time: {}. Some cars receive nan actions'.format(t))
         action[~nna] = 0.
         if not self.action_space.contains(action):
-            print('Time: {}. Warning: requested action outside of bounds, being clamped'.format(self._t))
+            print('Time: {}. Warning: requested action outside of bounds, being clamped'.format(t))
             action = action.clamp(self._min_acc, self._max_acc)
 
         # euler step the state
@@ -266,7 +275,7 @@ class InteractionSimulator(gym.Env):
         
         # TODO: add an isFree checker 
         free = torch.tensor([True] * self._nv)
-        should_spawn = (self._svt.t0 < self._t) & ~self._exceeded & ~nns & free
+        should_spawn = (self._svt.t0 <= t) & ~self._exceeded & ~nns & free
 
         # for now, just spawn them
         spawned = should_spawn
@@ -289,6 +298,7 @@ class InteractionSimulator(gym.Env):
             'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
             'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
             'raw_state': self._state.clone(),
+            'prev_state': prev_state,
             'action_taken': action.clone()
         })
 
@@ -345,7 +355,7 @@ class InteractionSimulator(gym.Env):
         """
 
         self._state = self._svt.state0
-        self._t = self._svt.minT
+        self._ind = 0
         self._exceeded = torch.tensor([False] * self._nv)
         self._graph.update_graph(self.projected_state)
         self.done = False

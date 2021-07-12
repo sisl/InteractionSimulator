@@ -1,6 +1,7 @@
 # test_simulator.py
 
 import pandas as pd
+import numpy as np
 from intersim.utils import get_map_path, get_svt, SVT_to_sim_stateactions
 from intersim.viz import animate
 import gym
@@ -19,24 +20,34 @@ def main():
     print('SVT path: {}'.format(svt_path))
     print('Map path: {}'.format(osm))
     
-
     states, actions = SVT_to_sim_stateactions(svt)
     n_frames = 200
-    # animate from states
-    animate(osm, states[:n_frames], svt._lengths, svt._widths, filestr=opj(outdir,'test_simactions_states'))
 
     # animate from environment
-    env = gym.make('intersim:intersim-v0', svt=svt, map_path=osm)
+    env = gym.make('intersim:intersim-v0', svt=svt, map_path=osm, 
+        min_acc=-np.inf, max_acc=np.inf)
     env.reset()
     done = False
     i = 0
+    obs, infos = [], []
+
     while not done and i < n_frames:
         env.render()
-        ob, r, done, info = env.step(actions[i])
+        try:
+            ob, r, done, info = env.step(actions[i])
+        except Exception as e:
+            print(e)
+            import pdb
+            pdb.set_trace()
+            ob, r, done, info = env.step(actions[i])
+        obs.append(ob)
+        infos.append(info)
         i+=1
     env.render()
     env.close(filestr=opj(outdir,'test_simactions_env'))
 
+    # animate from states
+    animate(osm, states[:n_frames+1], svt._lengths, svt._widths, filestr=opj(outdir,'test_simactions_states'))
 
 if __name__ == '__main__':
     main()
