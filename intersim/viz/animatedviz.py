@@ -129,19 +129,12 @@ class AnimatedViz:
         upleft = np.stack([x - lengths / 2., y + widths / 2.], axis=-1)
 
         rotcorners = batched_rotate_around_center(np.stack([lowleft, lowright, upright, upleft],axis=1), 
-                np.stack([x, y], axis=-1), 
-                yaw=psi).tolist()
+                np.stack([x, y], axis=-1), yaw=psi)
 
-        ncars = len(x)
+        all_corners = np.stack([np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])]*self._nv)
+        all_corners[nni] = rotcorners
 
-        nnotcars = self._nv - ncars
-
-        rotcorners += [None for j in range(nnotcars)]
-
-        for corners, carrect in zip(rotcorners,self._carrects):
-            if corners is None:
-                carrect.set_xy(np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)]))
-                continue
+        for corners, carrect in zip(all_corners, self._carrects):
             carrect.set_xy(corners)
         
         edges = []
