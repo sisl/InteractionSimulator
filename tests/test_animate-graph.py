@@ -29,7 +29,7 @@ def main():
     graphs = []
     for i in range(len(states)):
         s = states[i]
-        cvg.update_graph(s)
+        cvg.update_graph(s.reshape((-1,5)))
         graphs.append(cvg.edges)
         
     fig = plt.figure()

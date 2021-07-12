@@ -7,7 +7,7 @@ import numpy as np
 import pickle
 from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt
 from intersim import Box, StackedVehicleTraj, InteractionGraph
-from intersim.viz.utils import build_map
+from intersim.viz import animate, build_map
 
 import gym
 from gym import error, spaces, utils
@@ -375,36 +375,8 @@ class InteractionSimulator(gym.Env):
             torch.save(self._xpoly, filestr+'_xpoly.pt')
             torch.save(self._ypoly, filestr+'_ypoly.pt')
             if self._mode == 'post':
-                self._animate(self._map_path, stacked_states, self._lengths, self._widths, 
-                                self._graph_list, filestr, **kwargs)
+                animate(self._map_path, stacked_states, self._lengths, self._widths, 
+                        graphs=self._graph_list, **kwargs)
 
-    def _animate(self, osm, states, lengths, widths, graphs, file, **kwargs):
-        """
-        Wrapper for animating simulation once finished
-        Args:
-            osm (str): path to .osm map file
-            states (torch.tensor): (frames, nv*5) tensor of vehicle states
-            lengths (torch.tensor): (nv,) array of vehicle lengths 
-            widths (torch.tensor): (nv,) array of vehicle widths
-            graphs (list[list[tuple]]): list of list of edges. Outer list indexes frame.
-            file (str): base file string to save animation to
-        """
-        import matplotlib
-        import matplotlib.pyplot as plt
-        import matplotlib.animation as animation
-        from intersim.viz.animatedviz import AnimatedViz
-        fps = kwargs.get('fps', 15)
-        bitrate = kwargs.get('bitrate', 1800)
-        enc = kwargs.get('encoder', 'ffmpeg')
-        iv = kwargs.get('interval', 20)
-        blit = kwargs.get('blit', True)
 
-        Writer = animation.writers[enc]
-        writer = Writer(fps=fps, bitrate=bitrate)
-        fig = plt.figure()
-        ax = plt.axes()
-        av = AnimatedViz(ax, osm, states, lengths, widths, graphs=graphs)
-        ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                        interval=iv, blit=blit, init_func=av.initfun,repeat=False)
-        ani.save(file+'_ani.mp4', writer)
 

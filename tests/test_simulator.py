@@ -25,7 +25,7 @@ def main():
 
     env.reset()
     done = False
-    n_frames = 10
+    n_frames = 50
     i = 0
     while not done and i < n_frames:
         env.render()
