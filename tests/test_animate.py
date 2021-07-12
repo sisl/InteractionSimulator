@@ -1,39 +1,42 @@
 # test_animate.py
 
-import pandas as pd
-from intersim.datautils import df_to_stackedvehicletraj, SVT_to_simstates
-from intersim import RoundaboutSimulator
-import matplotlib.animation as animation
-from intersim.viz.animatedviz import AnimatedViz
-import matplotlib.pyplot as plt
-
-import torch
-
-def main():
+from intersim.utils import get_map_path, get_svt, SVT_to_simstates
+from intersim.viz import animate
+import os
+opj = os.path.join
+def test_animate(graph=False):
+    outdir  = opj('tests','output')
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
+    
+    nframes = 400
 
     # load a trackfile
-    df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+    svt, svt_path = get_svt()
+    osm = get_map_path()
+    print('SVT path: {}'.format(svt_path))
+    print('Map path: {}'.format(osm))
+    
+    states = SVT_to_simstates(svt)[:nframes]
 
-    stv = df_to_stackedvehicletraj(df)
+    if graph:
+        filestr = opj(outdir,'test_animate_graph')
+        from intersim.graphs import ConeVisibilityGraph
+        cvg = ConeVisibilityGraph(r=20, half_angle=120)
+        graphs = []
+        for i in range(len(states)):
+            s = states[i]
+            cvg.update_graph(s.reshape((-1,5)))
+            graphs.append(cvg.edges)
+    else:
+        filestr = opj(outdir,'test_animate')
+        graphs = None
 
-    states = SVT_to_simstates(stv)
+    animate(osm, states, svt._lengths, svt._widths, graphs=graphs, filestr=filestr)
 
-    fig = plt.figure()
-    ax = plt.axes(
-        xlim=(900, 1100), ylim=(900, 1100)
-        )
-    ax.set_aspect('equal', 'box')
-
-    osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
-
-    av = AnimatedViz(ax, osm, states, stv.lengths, stv.widths)
-
-    ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                   interval=20, blit=True, init_func=av.initfun, 
-                   repeat=True)
-
-    plt.show()
-
+def test_animate_graph():
+    pass
 
 if __name__ == '__main__':
-    main()
+    test_animate()
+    test_animate(graph=True)

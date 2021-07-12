@@ -1,20 +1,46 @@
 # animatedviz.py
+from numpy import pi
+import numpy as np
+import torch
 
 import matplotlib
 from matplotlib import cm
 import matplotlib.patches
 import matplotlib.transforms
-from numpy import pi
-import numpy as np
-import torch
-
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 from intersim.viz.utils import batched_rotate_around_center, draw_map_without_lanelet, build_map
 
 import os
 
 opj = os.path.join
+
+def animate(osm, states, lengths, widths, graphs=None, filestr='render', **kwargs):
+    """
+    Wrapper for animating simulation once finished
+    Args:
+        osm (str): path to .osm map file
+        states (torch.tensor): (frames, nv*5) tensor of vehicle states
+        lengths (torch.tensor): (nv,) array of vehicle lengths 
+        widths (torch.tensor): (nv,) array of vehicle widths
+        graphs (list[list[tuple]]): list of list of edges. Outer list indexes frame.
+        filestr (str): base file string to save animation to
+    """
+    fps = kwargs.get('fps', 15)
+    bitrate = kwargs.get('bitrate', 1800)
+    enc = kwargs.get('encoder', 'ffmpeg')
+    iv = kwargs.get('interval', 20)
+    blit = kwargs.get('blit', True)
+
+    Writer = animation.writers[enc]
+    writer = Writer(fps=fps, bitrate=bitrate)
+    fig = plt.figure()
+    ax = plt.axes()
+    av = AnimatedViz(ax, osm, states, lengths, widths, graphs=graphs)
+    ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
+                    interval=iv, blit=blit, init_func=av.initfun,repeat=False)
+    ani.save(filestr+'_ani.mp4', writer)
 
 class AnimatedViz:
     '''
@@ -66,7 +92,7 @@ class AnimatedViz:
         np.random.shuffle(car_colors)
         for i in range(self._nv):
             rectpts = np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])
-            rect = matplotlib.patches.Polygon(rectpts, closed=True, color=car_colors[i], zorder=0.2)
+            rect = matplotlib.patches.Polygon(rectpts, closed=True, color=car_colors[i], zorder=2.5, ec='k')
             ax.add_patch(rect)
             carrects.append(rect)
         self._carrects = carrects
@@ -128,10 +154,17 @@ class AnimatedViz:
             for e in graph:
                 stidx, enidx = e
                 
-                arrow = matplotlib.patches.Arrow(self._x[i,stidx], self._y[i,stidx], 
-                                                 self._x[i,enidx] - self._x[i,stidx], 
-                                                 self._y[i,enidx] - self._y[i,stidx],  
-                                                 width=3.0, color='c', zorder=0.1,ec='k')
+                #arrow_func = matplotlib.patches.ConnectionPatch if (enidx, stidx) in graph else matplotlib.patches.Arrow
+                ars = '<|-|>' if (enidx, stidx) in graph else '-|>'
+                arrow = matplotlib.patches.FancyArrowPatch(posA = (self._x[i,stidx], self._y[i,stidx]),
+                    posB = (self._x[i,enidx], self._y[i,enidx]),
+                    arrowstyle=ars, mutation_scale=15, color='w', zorder=2.9, ec='k',)
+
+                # arrow = matplotlib.patches.Arrow(self._x[i,stidx], self._y[i,stidx], 
+                #                                  self._x[i,enidx] - self._x[i,stidx], 
+                #                                  self._y[i,enidx] - self._y[i,stidx],  
+                #                                  width=3.0, color='c', zorder=0.1, ec='k')
+
                 ax.add_patch(arrow)
                 edges.append(arrow)
         self._edges = edges

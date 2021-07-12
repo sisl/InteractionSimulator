@@ -19,7 +19,7 @@ LOCATIONS = [
     'DR_USA_Roundabout_SR'
 ]
 MAX_TRACKS=5
-def get_map_path(loc: int) -> str:
+def get_map_path(loc: int = 0) -> str:
     """
     Get path to .osm map file from location index
     Args:
@@ -30,7 +30,7 @@ def get_map_path(loc: int) -> str:
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
     return opj('datasets','maps',LOCATIONS[loc]+'.osm')
 
-def get_svt(loc: int, track: int):
+def get_svt(loc: int = 0, track: int = 0):
     """
     Load stacked vehicle trajectory from location and track indices
     Args:
