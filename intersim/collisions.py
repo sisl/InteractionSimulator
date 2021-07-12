@@ -55,7 +55,7 @@ def count_collisions_trajectory(x, lengths, widths):
     cols = torch.zeros((nv0, nv0))
     for t in range(T):
         cols += collision_matrix(x[t], lengths, widths)
-    ncols = np.count_nonzero(cols) / 2 # divide by 2 since symmetric
+    ncols = np.count_nonzero(cols) // 2 # divide by 2 since symmetric
     return ncols
 
 def count_collisions(x, lengths, widths):
@@ -69,12 +69,11 @@ def count_collisions(x, lengths, widths):
         ncols (int): number of collisions
     """
 
-    T,nv0,_ = x.shape
     cols = collision_matrix(x, lengths, widths)
-    ncols = np.count_nonzero(cols) / 2 # divide by 2 since symmetric
+    ncols = np.count_nonzero(cols) // 2 # divide by 2 since symmetric
     return ncols
 
-def check_collisions(x, length, widths)
+def check_collisions(x, lengths, widths):
     """
     Check whether there are collisions in a single frame.
     Args:
@@ -97,9 +96,10 @@ def collision_matrix(x, lengths, widths):
         c_mat (torch.tensor): (nv, nv) collision tensor 
             where [i,j] is True if i is colliding with j
     """
+    nv0 = len(lengths)
+    c_mat = torch.zeros(nv0, nv0)
     polys_t, nni_t = states_to_polygons(x, lengths, widths)
     nv = len(polys_t)
-    c_mat = torch.zeros(nv, nv)
     for i in range(1,nv):
         for j in range(i):
             if polys_t[i].intersects(polys_t[j]):

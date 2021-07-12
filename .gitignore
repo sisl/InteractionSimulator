@@ -138,3 +138,5 @@ datasets/
 *.pt
 *.pkl
 
+# Test outputs
+tests/output/

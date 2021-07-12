@@ -5,9 +5,11 @@ from enum import Enum
 import torch
 import numpy as np
 import pickle
+
 from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt
 from intersim import Box, StackedVehicleTraj, InteractionGraph
 from intersim.viz import animate, build_map
+from intersim.collisions import check_collisions
 
 import gym
 from gym import error, spaces, utils
@@ -48,6 +50,7 @@ class InteractionSimulator(gym.Env):
                  map_path: str = None, 
                  graph: InteractionGraph = InteractionGraph(),
                  min_acc: float=-10.0, max_acc: float=10.0,
+                 stop_on_collision: bool=False,
                  reward_method='none', observe_method='full',
                  custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.,
                  shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0
@@ -62,6 +65,7 @@ class InteractionSimulator(gym.Env):
             graph (InteractionGraph): graph depicting vehicle interactions
             min_acc (float): minimum acceleration allowed
             max_acc (float): maximum acceleration allowed
+            stop_on_collision (bool): whether to stop the episode on collision
             reward_method (str): reward type. see RewardMethod class
             observe_method (str): observation type. see ObserveMethod class
             custom_reward (Callable): custom reward function R(s',a) to be used w/ 'custom' reward method
@@ -97,6 +101,7 @@ class InteractionSimulator(gym.Env):
         self._state = torch.zeros(self._nv, 2) * np.nan
         self._t = svt.minT
         self._exceeded = torch.tensor([False] * self._nv)
+        self._stop_on_collision = stop_on_collision
         self._min_acc = min_acc
         self._max_acc = max_acc
         self._map_path = map_path
@@ -227,12 +232,15 @@ class InteractionSimulator(gym.Env):
             info (dict): diagnostic information useful for debugging
         """
 
+        assert not self.done, "Simulation has ended and must be reset"
+
         self._t += self._dt
 
         # check for proper action input
         # 1) make sure all non-nan states have actions
         # 2) set actions for all nan state to 0
         # 3) make sure final action is inside action space, if not clamp
+        
         nns = ~torch.isnan(self._state[:,0]) 
         nna = ~torch.isnan(action[:,0]) 
         nns_na = nns & ~nna
@@ -266,6 +274,11 @@ class InteractionSimulator(gym.Env):
         self._state[spawned,1] = self._svt.v0[spawned]
         
         projstate = self.projected_state
+
+        # if terminating on collision, check for collisions
+        if self._stop_on_collision:
+            if check_collisions(projstate, self._lengths, self._widths):
+                self.done = True 
 
         # update interaction graph
         self._graph.update_graph(projstate)
