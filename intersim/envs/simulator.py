@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import pickle
 
-from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt
+from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt, powerseries
 from intersim import Box, StackedVehicleTraj, InteractionGraph
 from intersim.viz import animate, build_map
 from intersim.collisions import check_collisions
@@ -211,6 +211,34 @@ class InteractionSimulator(gym.Env):
         relstate[...,3:5] = to_circle(relstate[...,3:5])
         return relstate
     
+    def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True):
+        """
+        Return the upcoming path of all vehicles in fixed path-length increments up to maximum path.
+        Args:
+            delta (float): path increment
+            is_distance (bool): whether delta denotes m (True) or s (False)
+            n (int): number of increments to calculate
+        Returns:
+            x (torch.Tensor): (nv, n) x positions
+            y (torch.Tensor): (nv, n) y positions
+        """
+
+        if is_distance:
+            s = delta * torch.arange(1,n+1).repeat(self._nv,1)
+        else:
+            v = self._state[:,1:2]
+            s = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
+        
+        s = s + self._state[:,0:1]
+        nni = (s <= self._svt.smax.unsqueeze(1))
+        s[~nni] = np.nan
+
+        deg = self._xpoly.shape[-1] - 1
+        expand_sims = powerseries(s, deg) # (nv, n, deg+1)
+        x = (self._xpoly.unsqueeze(1)*expand_sims).sum(dim=-1)
+        y = (self._ypoly.unsqueeze(1)*expand_sims).sum(dim=-1)
+        return x, y
+
     @property
     def map_info(self):
         """
@@ -320,6 +348,9 @@ class InteractionSimulator(gym.Env):
                 neighbor_dict (dict): interaction graph neighbor dictionary
                 relative_state (torch.tensor): (nv,nv,5) relative state information where [i,j,k] encodes state[j,k] - state[i,k]
                 map_info: map information embedding
+                paths (tuple): tuple of x and y positions of n future points along each trajectory
+                    x (torch.tensor): (nv,n) x positions of n future points
+                    y (torch.tensor): (nv,n) y positions of n future points
                 hidden_info: external information that would usually stay hidden for training
         """
         observation = {}
@@ -327,6 +358,7 @@ class InteractionSimulator(gym.Env):
         observation['neighbor_dict'] = self._graph.neighbor_dict
         if self._observe_method in [ObserveMethod.FULL, ObserveMethod.HIDDEN]:
             observation['relative_state'] = self._relative_state(next_state)
+            observation['paths'] = self._generate_paths(delta=10., n=20, is_distance=True)
             observation['map_info'] = self.map_info
         if self._observe_method in [ObserveMethod.HIDDEN]:
             observation['hidden_info'] = self.info
