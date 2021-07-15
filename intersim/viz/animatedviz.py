@@ -1,6 +1,7 @@
 # animatedviz.py
 
 import matplotlib
+from matplotlib import cm
 import matplotlib.patches
 import matplotlib.transforms
 from numpy import pi
@@ -57,13 +58,18 @@ class AnimatedViz:
         ax = self._ax 
 
         draw_map_without_lanelet(self._osm, ax, 0.,0.)
+        ax.axes.xaxis.set_visible(False)
+        ax.axes.yaxis.set_visible(False)
 
         # init car patches
         carrects = []
-
+        cmap = cm.get_cmap('jet')
+        car_colors = cmap(np.linspace(0,1,num=self._nv))
+        np.random.seed(0)
+        np.random.shuffle(car_colors)
         for i in range(self._nv):
             rectpts = np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])
-            rect = matplotlib.patches.Polygon(rectpts, closed=True, color='r', zorder=0.2)
+            rect = matplotlib.patches.Polygon(rectpts, closed=True, color=car_colors[i], zorder=9, ec='k')
             ax.add_patch(rect)
             carrects.append(rect)
         self._carrects = carrects
@@ -101,19 +107,12 @@ class AnimatedViz:
         upleft = np.stack([x - lengths / 2., y + widths / 2.], axis=-1)
 
         rotcorners = batched_rotate_around_center(np.stack([lowleft, lowright, upright, upleft],axis=1), 
-                np.stack([x, y], axis=-1), 
-                yaw=psi).tolist()
+                np.stack([x, y], axis=-1), yaw=psi)
 
-        ncars = len(x)
+        all_corners = np.stack([np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)])]*self._nv)
+        all_corners[nni] = rotcorners
 
-        nnotcars = self._nv - ncars
-
-        rotcorners += [None for j in range(nnotcars)]
-
-        for corners, carrect in zip(rotcorners,self._carrects):
-            if corners is None:
-                carrect.set_xy(np.array([(-1.,-1.), (1.,-1), (1.,1.), (-1.,1.)]))
-                continue
+        for corners, carrect in zip(all_corners, self._carrects):
             carrect.set_xy(corners)
         
         edges = []
@@ -125,10 +124,11 @@ class AnimatedViz:
             for e in graph:
                 stidx, enidx = e
                 
-                arrow = matplotlib.patches.Arrow(self._x[i,stidx], self._y[i,stidx], 
-                                                 self._x[i,enidx] - self._x[i,stidx], 
-                                                 self._y[i,enidx] - self._y[i,stidx],  
-                                                 width=3.0, color='c', zorder=0.1,ec='k')
+                ars = '<|-|>' if (enidx, stidx) in graph else '-|>'
+                arrow = matplotlib.patches.FancyArrowPatch(posA = (self._x[i,stidx], self._y[i,stidx]),
+                    posB = (self._x[i,enidx], self._y[i,enidx]),
+                    arrowstyle=ars, mutation_scale=15, color='w', zorder=9.5, ec='k',)
+
                 ax.add_patch(arrow)
                 edges.append(arrow)
         self._edges = edges

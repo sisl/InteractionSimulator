@@ -103,7 +103,7 @@ def set_visible_area(point_dict, axes):
 def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
 
     assert isinstance(axes, matplotlib.axes.Axes)
-
+    
     axes.set_aspect('equal', adjustable='box')
     axes.patch.set_facecolor('lightgrey')
 
@@ -126,31 +126,31 @@ def draw_map_without_lanelet(filename, axes, lat_origin, lon_origin):
         if way_type is None:
             raise RuntimeError("Linestring type must be specified")
         elif way_type == "curbstone":
-            type_dict = dict(color="black", linewidth=1, zorder=10)
+            type_dict = dict(color="black", linewidth=1)
         elif way_type == "line_thin":
             way_subtype = get_subtype(way)
             if way_subtype == "dashed":
-                type_dict = dict(color="white", linewidth=1, zorder=10, dashes=[10, 10])
+                type_dict = dict(color="white", linewidth=1, dashes=[10, 10])
             else:
-                type_dict = dict(color="white", linewidth=1, zorder=10)
+                type_dict = dict(color="white", linewidth=1)
         elif way_type == "line_thick":
             way_subtype = get_subtype(way)
             if way_subtype == "dashed":
-                type_dict = dict(color="white", linewidth=2, zorder=10, dashes=[10, 10])
+                type_dict = dict(color="white", linewidth=2, dashes=[10, 10])
             else:
-                type_dict = dict(color="white", linewidth=2, zorder=10)
+                type_dict = dict(color="white", linewidth=2)
         elif way_type == "pedestrian_marking":
-            type_dict = dict(color="white", linewidth=1, zorder=10, dashes=[5, 10])
+            type_dict = dict(color="white", linewidth=1, dashes=[5, 10])
         elif way_type == "bike_marking":
-            type_dict = dict(color="white", linewidth=1, zorder=10, dashes=[5, 10])
+            type_dict = dict(color="white", linewidth=1, dashes=[5, 10])
         elif way_type == "stop_line":
-            type_dict = dict(color="white", linewidth=3, zorder=10)
+            type_dict = dict(color="white", linewidth=3)
         elif way_type == "virtual":
-            type_dict = dict(color="blue", linewidth=1, zorder=10, dashes=[2, 5])
+            type_dict = dict(color="blue", linewidth=1, dashes=[2, 5])
         elif way_type == "road_border":
-            type_dict = dict(color="black", linewidth=1, zorder=10)
+            type_dict = dict(color="black", linewidth=1)
         elif way_type == "guard_rail":
-            type_dict = dict(color="black", linewidth=1, zorder=10)
+            type_dict = dict(color="black", linewidth=1)
         elif way_type == "traffic_sign":
             continue
         else:
