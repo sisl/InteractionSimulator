@@ -3,7 +3,7 @@
 from intersim.box import Box
 from intersim.vehicletraj import StackedVehicleTraj
 from intersim.graph import InteractionGraph
-from intersim.utils import LOCATIONS
+from intersim.utils import LOCATIONS, MAX_TRACKS
 
 from gym.envs.registration import register
 
