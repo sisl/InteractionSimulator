@@ -19,30 +19,32 @@ LOCATIONS = [
     'DR_USA_Roundabout_SR'
 ]
 MAX_TRACKS=5
-def get_map_path(loc: int = 0) -> str:
+def get_map_path(loc: int = 0, base: str = '') -> str:
     """
     Get path to .osm map file from location index
     Args:
         loc (int): location index
+        base (str): base path
     Returns:
         osm (str): path to .osm map file
     """
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
-    return opj('datasets','maps',LOCATIONS[loc]+'.osm')
+    return opj(base, 'datasets','maps',LOCATIONS[loc]+'.osm')
 
-def get_svt(loc: int = 0, track: int = 0):
+def get_svt(loc: int = 0, track: int = 0, base: str = ''):
     """
     Load stacked vehicle trajectory from location and track indices
     Args:
         loc (int): location index
         track (int): track index
+        base (str): base path
     Returns:
         svt (StackedVehicleTraj): stacked vehicle traj to base trajectories off of
         path (str): path to data used
     """
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
     assert track >= 0 and track < MAX_TRACKS, "Invalid location index {} not in [0,{}]".format(track,MAX_TRACKS-1)
-    path = opj('datasets','trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
+    path = opj(base, 'datasets','trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
     df = pd.read_csv(path)
     stv = df_to_stackedvehicletraj(df)
     return stv, path
