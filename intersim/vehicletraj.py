@@ -29,9 +29,10 @@ class StackedVehicleTraj:
 		self._t0 = t0
 		self._s = s
 		self._v = v
+
 		self._smax = torch.tensor([s_[-1] for s_ in s])
 		self._v0 = torch.tensor([v_[0] for v_ in v])
-
+		self._s0 = torch.tensor([s_[0] for s_ in s])
 		self._xpoly = xpoly.detach()
 		self._ypoly = ypoly.detach()
 
@@ -165,7 +166,11 @@ class StackedVehicleTraj:
 	@property
 	def v0(self):
 		return self._v0
-
+	
+	@property
+	def s0(self):
+		return self._s0
+		
 	@property
 	def smax(self):
 		return self._smax

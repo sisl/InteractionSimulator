@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import torch
 from intersim.utils import get_map_path, get_svt, SVT_to_sim_stateactions
 from intersim.viz import animate
 import gym
@@ -21,7 +22,7 @@ def main():
     print('Map path: {}'.format(osm))
     
     states, actions = SVT_to_sim_stateactions(svt)
-    n_frames = 200
+    n_frames = 500
 
     # animate from environment
     env = gym.make('intersim:intersim-v0', svt=svt, map_path=osm, 
@@ -30,9 +31,18 @@ def main():
     done = False
     i = 0
     obs, infos = [], []
-
+    env_states = []
+    nnis = []
+    
     while not done and i < n_frames:
         env.render()
+        env_state = env.projected_state
+        env_states.append(env_state)
+        nni = ~torch.isnan(env_state[:,0])
+        nnis.append(nni)
+        norm = torch.norm(env_state[nni,:2]-states[i,nni,:2], dim=1)
+        print('Step %04i: Max state norm difference = %f'%(i, norm.max()))
+        
         try:
             ob, r, done, info = env.step(actions[i])
         except Exception as e:

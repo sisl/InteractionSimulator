@@ -307,7 +307,7 @@ class InteractionSimulator(gym.Env):
 
         # for now, just spawn them
         spawned = should_spawn
-        self._state[spawned,0] = 0.
+        self._state[spawned,0] = self._svt.s0[spawned]
         self._state[spawned,1] = self._svt.v0[spawned]
         
         projstate = self.projected_state

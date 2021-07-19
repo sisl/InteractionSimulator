@@ -207,7 +207,7 @@ def ssdot_to_simactions(s, sdot, dt=0.1):
     # TODO: filter accelerations better (e.g. states and velocities rather than just states)
     # TODO: vectorize 
     adj_sdot = sdot.clone()
-    simactions = torch.zeros(T-1, nv, 1) * np.nan
+    simactions = torch.zeros(T-1, nv, 1) # * np.nan
     for car in range(nv):
         for t in range(T-1):
             if np.isnan(s[t,car]):
@@ -242,7 +242,7 @@ def SVT_to_sim_stateactions(svt):
 
         si = svt.s[i]
         vi = svt.v[i]
-        ti = int(svt.t0[i]/svt.dt) - svt.minTind
+        ti = int((svt.t0[i]/svt.dt).round()) - svt.minTind
 
         sims[ti:ti+len(si), i] = si
         simv[ti:ti+len(vi), i] = vi
