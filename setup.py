@@ -31,6 +31,7 @@ setup(
         "sklearn",
         "pyproj",
         "pytest",
+        "shapely",
     ],    
     python_requires=">=3.6",
     test_requires=["pytest"],
