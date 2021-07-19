@@ -73,6 +73,23 @@ def count_collisions(x, lengths, widths):
     ncols = np.count_nonzero(cols) // 2 # divide by 2 since symmetric
     return ncols
 
+def check_collisions_trajectory(x, lengths, widths):
+    """
+    Count collisions in a trajectory.
+    Args:
+        x (torch.tensor): (T,nv,5) vehicle states
+        lengths (torch.tensor): (nv,) vehicle lengths
+        widths (torch.tensor): (nv,) vehicle lengths
+    Returns
+        cols torch.Tensor(bool): (T,) whether there is a collision at each time index
+    """
+
+    T,nv0,_ = x.shape
+    cols = []
+    for t in range(T):
+        cols.append(check_collisions(x[t], lengths, widths))
+    return torch.tensor(cols)
+    
 def check_collisions(x, lengths, widths):
     """
     Check whether there are collisions in a single frame.
