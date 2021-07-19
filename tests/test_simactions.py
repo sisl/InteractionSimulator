@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import torch
-from intersim.utils import get_map_path, get_svt, SVT_to_sim_stateactions
+from intersim.utils import get_map_path, get_svt, SVT_to_stateactions
 from intersim.viz import animate
 import gym
 
@@ -21,7 +21,7 @@ def main():
     print('SVT path: {}'.format(svt_path))
     print('Map path: {}'.format(osm))
     
-    states, actions = SVT_to_sim_stateactions(svt)
+    states, actions = SVT_to_stateactions(svt)
     n_frames = 500
 
     # animate from environment

@@ -72,17 +72,22 @@ class StackedVehicleTraj:
 		self._maxTind = maxTind
 		self._Tind = Tind
 		self._T = T
-
-		# initial states
-		state0 = torch.zeros(self._nv, 2) * np.nan
-		for i in range(self._nv): 
-			if self._t0[i] == minT:
-				state0[i,0] = s[i][0]
-				state0[i,1] = v[i][0]
-
-		self._state0 = state0
+		self._form_simstate()
+		self._state0 = self._simstate[0]
 		self._shuffled = False
-
+	
+	def _form_simstate(self):
+		""" 
+		Form the (T, nv, 2) 'simulation' state
+		"""
+		self._simstate = torch.ones(self.Tind, self.nv, 2) * np.nan
+		for i in range(self.nv):
+			si = self.s[i]
+			vi = self.v[i]
+			ti = int((self.t0[i]/self.dt).round()) - self.minTind
+			self._simstate[ti:ti+len(si), i, 0] = si
+			self._simstate[ti:ti+len(vi), i, 1] = vi
+	
 	def shuffle_tracks(self, seed: int = None):
 		self._shuffled = True
 		if seed:
@@ -106,6 +111,10 @@ class StackedVehicleTraj:
 		self._dypoly = self._dypoly[self._shuffle_idx]
 		self._ddxpoly = self._ddxpoly[self._shuffle_idx]
 		self._ddypoly = self._ddypoly[self._shuffle_idx]
+
+	@property
+	def simstate(self):
+		return self._simstate
 
 	@property
 	def state0(self):
@@ -196,5 +205,5 @@ class StackedVehicleTraj:
 		return self._widths
 	
 	
-	
+
 	

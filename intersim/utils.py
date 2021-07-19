@@ -227,34 +227,20 @@ def ssdot_to_simactions(s, sdot, dt=0.1):
             adj_sdot[t+1,car] = adj_sdot[t,car] + dt * simactions[t,car,0]
     return simactions
 
-def SVT_to_sim_stateactions(svt):
+def SVT_to_stateactions(svt: StackedVehicleTraj):
     """
     Converts a StackedVehicleTrajectory into Simulator state and actions
     Args:
-        svt (StackedVehicleTrajectory): stacked vehicle trajectory
+        svt (StackedVehicleTraj)
     Returns:
-        simstates (torch.tensor): (T, nv, 5) states
-        simactions (torch.tensor): (T-1, nv, 1) actions
+        sim_projected_states (torch.tensor): (T, nv, 5) states
+        sim_actions (torch.tensor): (T-1, nv, 1) actions
     """
-
-    sims = torch.ones(svt.Tind, svt.nv) * np.nan
-    simv = torch.ones(svt.Tind, svt.nv) * np.nan
-  
-    for i in range(svt.nv):
-
-        si = svt.s[i]
-        vi = svt.v[i]
-        ti = int((svt.t0[i]/svt.dt).round()) - svt.minTind
-
-        sims[ti:ti+len(si), i] = si
-        simv[ti:ti+len(vi), i] = vi
-    
-    simstates = ssdot_to_simstates(sims, simv, 
+    sim_projected_states = ssdot_to_simstates(svt.simstate[...,0], svt.simstate[...,1], 
                                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
-    simactions = ssdot_to_simactions(sims, simv)
-
-    return simstates, simactions
+    sim_actions = ssdot_to_simactions(svt.simstate[...,0], svt.simstate[...,1])
+    return sim_projected_states, sim_actions
 
 
 
