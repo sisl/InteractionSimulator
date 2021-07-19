@@ -337,6 +337,23 @@ class InteractionSimulator(gym.Env):
         reward = self._get_reward(projstate, action)
         return ob, reward, self.done, self.info   
     
+    def target_state(self, ssdot):
+        """
+        Take an action to target a particular next state
+        Args:
+            ssdot (torch.Tensor): (nv, 2) tensor of next s and sdot to target
+        Returns:
+            action (torch.Tensor): (nv, 1) tensor of ideal action to take
+        """
+        assert len(ssdot) == self._nv, 'Incorrect target state size'
+        next_s = ssdot[:,0:1]
+        s = self._state[:,0:1]
+        v = self._state[:,1:2]
+        action = 2 * (next_s - s - (self._dt * v)) / (self._dt**2)
+        nan_mask = torch.isnan(s) | torch.isnan(next_s)
+        action[nan_mask] = 0.
+        return action
+
     def _get_observation(self, next_state):
         """
         Generate observation
