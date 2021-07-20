@@ -401,6 +401,8 @@ class InteractionSimulator(gym.Env):
         """
         Reset simulation.
         Returns:
+            observation (dict): observation dictionary
+            info (dict): diagnostic information useful for debugging
         """
 
         self._state = self._svt.state0
@@ -413,8 +415,16 @@ class InteractionSimulator(gym.Env):
         self._state_list = []
         self._graph_list = []
         print('Environment Reset')
-        return None
-        #return self.projected_state.reshape(-1), {'raw_state': self._state.clone()}
+
+        # generate info
+        self.info.update({
+            'raw_state': self._state.clone(),
+        })
+
+        # generate observation
+        ob = self._get_observation(self.projected_state)
+        
+        return ob, self.info   
 
     def render(self, mode='post'):
         """
