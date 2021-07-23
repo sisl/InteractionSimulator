@@ -211,25 +211,29 @@ class InteractionSimulator(gym.Env):
         relstate[...,3:5] = to_circle(relstate[...,3:5])
         return relstate
     
-    def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True):
+    def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=True):
         """
         Return the upcoming path of all vehicles in fixed path-length increments up to maximum path.
         Args:
             delta (float): path increment
             is_distance (bool): whether delta denotes m (True) or s (False)
             n (int): number of increments to calculate
+            override (bool): whether to override calculation to do equal segments along valid path
         Returns:
             x (torch.Tensor): (nv, n) x positions
             y (torch.Tensor): (nv, n) y positions
         """
 
-        if is_distance:
-            s = delta * torch.arange(1,n+1).repeat(self._nv,1)
+        if override:
+            delta = (self._svt.smax.unsqueeze(1) - self._state[:,0:1]) / n
+            ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
+        elif is_distance:
+            ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
         else:
             v = self._state[:,1:2]
-            s = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
+            ds = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
         
-        s = s + self._state[:,0:1]
+        s = ds + self._state[:,0:1]
         nni = (s <= self._svt.smax.unsqueeze(1))
         s[~nni] = np.nan
 
