@@ -225,7 +225,7 @@ class InteractionSimulator(gym.Env):
         """
 
         if override:
-            delta = (self._svt.smax.unsqueeze(1) - self._state[:,0:1]) / n
+            delta = (self._svt.smax.unsqueeze(1) - self._state[:,0:1]) / n * (n-1) / n
             ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
         elif is_distance:
             ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
