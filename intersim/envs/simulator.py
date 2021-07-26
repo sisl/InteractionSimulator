@@ -192,6 +192,7 @@ class InteractionSimulator(gym.Env):
                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
         projstate = projstate[0]
+        # remap psi to [-pi, pi)
         projstate[...,3] = to_circle(projstate[...,3])
         return projstate
 
@@ -205,10 +206,21 @@ class InteractionSimulator(gym.Env):
         Args:
             projstate (torch.tensor): (nv,5) projected state
         Returns:
-            relstate (torch.tensor): (nv, nv, 5) projected state, where relstate[i,j,k] = projstate[j,k] - projstate[i,k]
+            relstate (torch.tensor): (nv, nv, 6) projected state, where relstate[i,j,...] = projstate[j,...] - projstate[i,...]
+                The velocity is split up to vx and vy to compute relative velocities in a reasonable way
         """
+        # First separate v into vx and vy
+        psi = projstate[..., 3:4]
+        v = projstate[..., 2:3]
+        vx = v * psi.cos()
+        vy = v * psi.sin()
+        projstate = torch.cat([projstate[..., 0:2], vx, vy, projstate[..., 3:5]], dim=-1)
+
         relstate = projstate.unsqueeze(0) - projstate.unsqueeze(1)
-        relstate[...,3] = to_circle(relstate[...,3])
+        # remap psi to [-pi, pi)
+        relstate[...,4] = to_circle(relstate[...,4])
+        # fill diagonal with nan instead of zeros
+        torch.diagonal(relstate).fill_(np.nan)
         return relstate
     
     def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=True):
