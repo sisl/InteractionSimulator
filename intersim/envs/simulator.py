@@ -192,7 +192,7 @@ class InteractionSimulator(gym.Env):
                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
         projstate = projstate[0]
-        projstate[...,3:5] = to_circle(projstate[...,3:5])
+        projstate[...,3] = to_circle(projstate[...,3])
         return projstate
 
     @property
@@ -208,7 +208,7 @@ class InteractionSimulator(gym.Env):
             relstate (torch.tensor): (nv, nv, 5) projected state, where relstate[i,j,k] = projstate[j,k] - projstate[i,k]
         """
         relstate = projstate.unsqueeze(0) - projstate.unsqueeze(1)
-        relstate[...,3:5] = to_circle(relstate[...,3:5])
+        relstate[...,3] = to_circle(relstate[...,3])
         return relstate
     
     def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=True):
