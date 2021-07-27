@@ -223,7 +223,7 @@ class InteractionSimulator(gym.Env):
         torch.diagonal(relstate).fill_(np.nan)
         return relstate
     
-    def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=True):
+    def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=False):
         """
         Return the upcoming path of all vehicles in fixed path-length increments up to maximum path.
         Args:
