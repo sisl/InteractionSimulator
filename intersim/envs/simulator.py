@@ -246,13 +246,26 @@ class InteractionSimulator(gym.Env):
             ds = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
         
         s = ds + self._state[:,0:1]
-        nni = (s <= self._svt.smax.unsqueeze(1))
-        s[~nni] = np.nan
+        nni = (s <= self.smax.unsqueeze(1))
+        # s[~nni] = np.nan
 
         deg = self._xpoly.shape[-1] - 1
         expand_sims = powerseries(s, deg) # (nv, n, deg+1)
-        x = (self._xpoly.unsqueeze(1)*expand_sims).sum(dim=-1)
-        y = (self._ypoly.unsqueeze(1)*expand_sims).sum(dim=-1)
+        y = (self._ypoly.unsqueeze(1) * expand_sims).sum(dim=-1)
+        x = (self._xpoly.unsqueeze(1) * expand_sims).sum(dim=-1)
+
+        expand_smax = powerseries(self.smax, deg)
+        x_max = (self._xpoly * expand_smax).sum(dim=-1)
+        y_max = (self._ypoly * expand_smax).sum(dim=-1)
+
+        s = ds + self._state[:,0:1]
+        dx = (self._svt._dxpoly * expand_smax).sum(dim=-1)
+        dy = (self._svt._dypoly * expand_smax).sum(dim=-1)
+        x_line = x_max.unsqueeze(1) + (s - self.smax.unsqueeze(1)) * dx.unsqueeze(1)
+        y_line = y_max.unsqueeze(1) + (s - self.smax.unsqueeze(1)) * dy.unsqueeze(1)
+
+        x[~nni] = x_line[~nni]
+        y[~nni] = y_line[~nni]
         return x, y
 
     @property
