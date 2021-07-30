@@ -48,7 +48,6 @@ class InteractionGraph:
     def reverse_edges(self):
         return [(j,i) for i in self.nodes for j in self._neighbor_dict[i]]
     
-    @property
     def adjacency_matrix(self, nv):
         """
         Return adjacency matrix

@@ -226,7 +226,7 @@ class InteractionSimulator(gym.Env):
         torch.diagonal(relstate).fill_(np.nan)
 
         if self._mask_relstate:
-            relstate[~self._graph.adjacency_matrix] = np.nan
+            relstate[~self._graph.adjacency_matrix(self._nv)] = np.nan
 
         return relstate
     
