@@ -53,7 +53,8 @@ class InteractionSimulator(gym.Env):
                  stop_on_collision: bool=False,
                  reward_method='none', observe_method='full',
                  custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.,
-                 shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0
+                 shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0,
+                 mask_relstate: bool=False,
                  ):
         """
         Roundabout simulator.
@@ -71,6 +72,7 @@ class InteractionSimulator(gym.Env):
             custom_reward (Callable): custom reward function R(s',a) to be used w/ 'custom' reward method
             shuffle_tracks (bool): whether to shuffle to vehicle tracks
             shuffle_tracks_seed (int): seed to use when shuffling the tracks
+            mask_relstate (bool): whether to mask vehicles based on the interaction graph
         Notes:
             action_space is [min_acc,max_acc] ^ nvehicles
             state_space is [x,y,v,psi,psidot] ^ nvehicles
@@ -115,6 +117,7 @@ class InteractionSimulator(gym.Env):
         self._reward_method = RewardMethod(reward_method)
         self._observe_method = ObserveMethod(observe_method)
         self._custom_reward = custom_reward
+        self._mask_relstate = mask_relstate
 
         # gym fields
         # using intersim.Box over spaces.Box for pytorch
@@ -221,6 +224,10 @@ class InteractionSimulator(gym.Env):
         relstate[...,4] = to_circle(relstate[...,4])
         # fill diagonal with nan instead of zeros
         torch.diagonal(relstate).fill_(np.nan)
+
+        if self._mask_relstate:
+            relstate[~self._graph.adjacency_matrix] = np.nan
+
         return relstate
     
     def _generate_paths(self, delta: float = 10., n: int = 20, is_distance: bool=True, override: bool=False):

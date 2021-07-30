@@ -1,5 +1,6 @@
 # test_simulator.py
-
+import intersim
+import intersim.utils
 from intersim.utils import df_to_stackedvehicletraj
 from intersim.graphs import ConeVisibilityGraph
 
@@ -15,7 +16,7 @@ def main():
     filestr = opj(outdir,'test_simulator')
 
     cvg = ConeVisibilityGraph(r=20, half_angle=120)
-    env = gym.make('intersim:intersim-v0', graph=cvg)
+    env = gym.make('intersim:intersim-v0', graph=cvg, mask_relstate=True)
 
     env.reset()
     done = False

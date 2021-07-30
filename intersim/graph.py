@@ -1,5 +1,6 @@
 # graph.py
 from typing import List
+import torch
 class InteractionGraph:
     
     def __init__(self, neighbor_dict: dict={}):
@@ -47,6 +48,20 @@ class InteractionGraph:
     def reverse_edges(self):
         return [(j,i) for i in self.nodes for j in self._neighbor_dict[i]]
     
+    @property
+    def adjacency_matrix(self, nv):
+        """
+        Return adjacency matrix
+        Args:
+            nv (int): total number of vehicles in scene
+        Returns:
+            adj (torch.Tensor): (nv, nv) boolean tensor where adj[i,j] = (i,j) in edges
+        """
+        adj = torch.zeros(nv, nv, dtype=torch.bool)
+        for (i,j) in self.edges:
+            adj[i,j] = True
+        return adj
+
     @property
     def reverse_neighbor_dict(self):
         rdict = {node:[] for node in self.nodes}
