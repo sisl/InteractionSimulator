@@ -31,13 +31,14 @@ def get_map_path(loc: int = 0, base: str = '') -> str:
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
     return opj(base, 'datasets','maps',LOCATIONS[loc]+'.osm')
 
-def get_svt(loc: int = 0, track: int = 0, base: str = ''):
+def get_svt(loc: int = 0, track: int = 0, base: str = '', deg=20):
     """
     Load stacked vehicle trajectory from location and track indices
     Args:
         loc (int): location index
         track (int): track index
         base (str): base path
+        deg (int): polynomial degree for tracks
     Returns:
         svt (StackedVehicleTraj): stacked vehicle traj to base trajectories off of
         path (str): path to data used
@@ -46,7 +47,7 @@ def get_svt(loc: int = 0, track: int = 0, base: str = ''):
     assert track >= 0 and track < MAX_TRACKS, "Invalid location index {} not in [0,{}]".format(track,MAX_TRACKS-1)
     path = opj(base, 'datasets','trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
     df = pd.read_csv(path)
-    stv = df_to_stackedvehicletraj(df)
+    stv = df_to_stackedvehicletraj(df, deg=deg)
     return stv, path
 
 def to_circle(x):
@@ -66,11 +67,12 @@ def powerseries(x, deg):
 
     return torch.stack([x**i for i in range(deg+1)],dim=-1)
 
-def df_to_stackedvehicletraj(df):
+def df_to_stackedvehicletraj(df, deg=20):
     """
     Convert a vehicle_tracks dataframe to a StackedVehicleTraj
     Args:
         df (pd.DataFrame): vehicle_tracks dataframe
+        deg (int): polynomial degree for tracks
     Returns:
         svt (StackedVehicleTraj): stacked vehicle traj
     """
@@ -120,7 +122,7 @@ def df_to_stackedvehicletraj(df):
     lengths = torch.tensor(lengths)
     widths = torch.tensor(widths)
 
-    xpoly, ypoly = polyfit_sxy(slist,xlist,ylist)
+    xpoly, ypoly = polyfit_sxy(slist,xlist,ylist, deg=deg)
 
     dt = df_.timestamp_ms.diff().mean()/1000
 
@@ -134,6 +136,7 @@ def polyfit_sxy(s, x, y, deg=20):
         s (list of torch.tensor): list of nv path positions
         x (list of torch.tensor): list of nv path xs
         y (list of torch.tensor): list of nv path ys
+        deg (int): polynomial degree for tracks
     Returns:
         xpoly (torch.tensor): (nv, deg+1) coeffs of x(s)
         ypoly (torch.tensor): (nv, deg+1) coeffs of y(s)
