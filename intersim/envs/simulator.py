@@ -373,7 +373,7 @@ class InteractionSimulator(gym.Env):
         reward = self._get_reward(projstate, action)
         return ob, reward, self.done, self.info   
     
-    def target_state(self, ssdot):
+    def target_state(self, ssdot, mu=0):
         """
         Take an action to target a particular next state
         Args:
@@ -385,7 +385,7 @@ class InteractionSimulator(gym.Env):
         next_s = ssdot[:,0:1]
         s = self._state[:,0:1]
         v = self._state[:,1:2]
-        action = 2 * (next_s - s - (self._dt * v)) / (self._dt**2)
+        action = 2 * (next_s - s - (self._dt * v)) / (self._dt**2 + 4 * mu / self._dt**2)
         nan_mask = torch.isnan(s) | torch.isnan(next_s)
         action[nan_mask] = 0.
         return action
