@@ -11,6 +11,9 @@ torch.set_default_dtype(torch.float64)
 import os
 opj = os.path.join
 
+import intersim
+DATASET_BASE = os.path.normpath(os.path.join(os.path.dirname(intersim.__file__), '..'))
+
 LOCATIONS = [
     'DR_USA_Roundabout_FT',
     'DR_CHN_Roundabout_LN',
@@ -19,7 +22,7 @@ LOCATIONS = [
     'DR_USA_Roundabout_SR'
 ]
 MAX_TRACKS=5
-def get_map_path(loc: int = 0, base: str = '') -> str:
+def get_map_path(loc: int = 0, base: str = DATASET_BASE) -> str:
     """
     Get path to .osm map file from location index
     Args:
@@ -31,7 +34,7 @@ def get_map_path(loc: int = 0, base: str = '') -> str:
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
     return opj(base, 'datasets','maps',LOCATIONS[loc]+'.osm')
 
-def get_svt(loc: int = 0, track: int = 0, base: str = '', deg=20):
+def get_svt(loc: int = 0, track: int = 0, base: str = DATASET_BASE, deg=20):
     """
     Load stacked vehicle trajectory from location and track indices
     Args:
