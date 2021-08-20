@@ -441,7 +441,7 @@ class InteractionSimulator(gym.Env):
             info (dict): diagnostic information useful for debugging
         """
 
-        self._state = self._svt.state0
+        self._state = self._svt.state0.clone()
         self._ind = 0
         self._exceeded = torch.tensor([False] * self._nv)
         self._graph.update_graph(self.projected_state)
