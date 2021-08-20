@@ -7,7 +7,6 @@ from intersim.vehicletraj import StackedVehicleTraj
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
-torch.set_default_dtype(torch.float64)
 import os
 opj = os.path.join
 
@@ -112,8 +111,8 @@ def df_to_stackedvehicletraj(df, deg=20):
         # to tensors
         x = torch.tensor(x)
         y = torch.tensor(y)
-        v = torch.tensor(v)
-        s = torch.tensor(s)
+        v = torch.tensor(v).type(torch.get_default_dtype())
+        s = torch.tensor(s).type(torch.get_default_dtype())
 
         t0list.append(t0)
         slist.append(s)
@@ -145,8 +144,8 @@ def polyfit_sxy(s, x, y, deg=20):
         ypoly (torch.tensor): (nv, deg+1) coeffs of y(s)
     """
     nv = len(s)
-    xpoly = torch.zeros(nv, deg + 1).type(torch.get_default_dtype())
-    ypoly = torch.zeros(nv, deg + 1).type(torch.get_default_dtype())
+    xpoly = torch.zeros(nv, deg + 1)
+    ypoly = torch.zeros(nv, deg + 1)
     for i, (s_,x_,y_) in enumerate(zip(s,x,y)):
         s_ = s_.detach().numpy()
         x_ = x_.detach().numpy()
