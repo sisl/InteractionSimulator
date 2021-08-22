@@ -20,9 +20,8 @@ def states_to_polygons(x, lengths, widths):
     """
 
     nni = ~torch.isnan(x[:,0])
-    x = x[nni]
     vp = []
-    for  x_, li, wi in zip(x, lengths[nni], widths[nni]):
+    for  x_, li, wi in zip(x[nni], lengths[nni], widths[nni]):
         px, py, v, psi, psidot = x_
 
         pxy = torch.stack([px, py])

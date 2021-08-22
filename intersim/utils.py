@@ -174,14 +174,14 @@ def ssdot_to_simstates(s, sdot,
     T = s.shape[0]
 
     simstates = torch.ones(T, nv, 5) * np.nan
-    expand_sims = powerseries(s, deg)
+    expand_sims = powerseries(s.type(torch.float64), deg)
 
-    x = (xpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    dxds = (dxpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    ddxds = (ddxpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    y = (ypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    dyds = (dypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    ddyds = (ddypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
+    x = (xpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    dxds = (dxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    ddxds = (ddxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    y = (ypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    dyds = (dypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    ddyds = (ddypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
 
     psi = torch.atan2(dyds,dxds)
 
