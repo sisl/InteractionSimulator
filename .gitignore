@@ -140,3 +140,5 @@ datasets/
 
 # Test outputs
 tests/output/
+
+poetry.lock
