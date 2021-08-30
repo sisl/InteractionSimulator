@@ -1,12 +1,19 @@
 # datautils.py
 
-import pandas as pd
+import intersim
 import numpy as np
-from sklearn.linear_model import Lasso
+import os
 import torch
 from intersim.vehicletraj import StackedVehicleTraj
 
 torch.set_default_dtype(torch.float64)
+
+DATASET_DIR = os.environ.get(
+    "INTERSIM_DATASET_DIR",
+    os.path.normpath(
+        os.path.join(os.path.dirname(intersim.__file__), "..", "datasets")
+    ),
+)
 
 def powerseries(x, deg):
 

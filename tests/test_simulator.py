@@ -1,7 +1,7 @@
 # test_simulator.py
 
 import pandas as pd
-from intersim.datautils import df_to_stackedvehicletraj, SVT_to_simstates
+from intersim.datautils import df_to_stackedvehicletraj, DATASET_DIR
 from intersim import RoundaboutSimulator
 import matplotlib.animation as animation
 from intersim.viz.animatedviz import AnimatedViz
@@ -12,7 +12,7 @@ import torch
 def main():
 
     # load a trackfile
-    df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+    df = pd.read_csv(f'{DATASET_DIR}/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
 
     stv = df_to_stackedvehicletraj(df)
 
@@ -39,7 +39,7 @@ def main():
         )
     ax.set_aspect('equal', 'box')
 
-    osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
+    osm = f'{DATASET_DIR}/maps/DR_USA_Roundabout_FT.osm'
 
     av = AnimatedViz(ax, osm, states, stv.lengths, stv.widths)
 

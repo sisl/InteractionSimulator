@@ -1,7 +1,7 @@
 # test_idm.py
 
 import pandas as pd
-from intersim.datautils import *
+import intersim.utils as utils
 from intersim.default_policies.rulepolicy import RulePolicy
 from intersim import RoundaboutSimulator
 import matplotlib.animation as animation
@@ -9,16 +9,16 @@ from intersim.viz.animatedviz import AnimatedViz
 import matplotlib.pyplot as plt
 
 def main():
-    
+
     savefile = True
     if savefile:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=15, bitrate=1800)
-        
-    # load a trackfile
-    df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
 
-    stv = df_to_stackedvehicletraj(df)
+    # load a trackfile
+    df = pd.read_csv(f'{utils.DATASET_DIR}/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+
+    stv = utils.df_to_stackedvehicletraj(df)
 
     sim = RoundaboutSimulator(stv)
 
@@ -50,12 +50,12 @@ def main():
         )
     ax.set_aspect('equal', 'box')
 
-    osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
+    osm = f'{utils.DATASET_DIR}/maps/DR_USA_Roundabout_FT.osm'
 
     av = AnimatedViz(ax, osm, states, stv.lengths, stv.widths)
 
     ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                   interval=20, blit=True, init_func=av.initfun, 
+                   interval=20, blit=True, init_func=av.initfun,
                    repeat=not savefile)
 
     ani.save('rulepolicy.mp4', writer) if savefile else plt.show()
