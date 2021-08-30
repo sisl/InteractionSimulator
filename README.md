@@ -5,12 +5,9 @@ Simulator for the INTERACTION dataset
 
 ### Dependencies
 
-Install requirements with pip
+This package uses [poetry](https://python-poetry.org/) for dependency management. After [setting up poetry](https://python-poetry.org/docs/#installation) all dependencies can be installed by running `poetry install`. This will automatically create a virtual environment using a compatible python version and install all dependencies in that environment.
 
-```
-pip install -r requirements.txt
-export PYTHONPATH=$(pwd):$PYTHONPATH
-```
+In order to use the created environment, activate it via `poetry shell`. Please refer to the [poetry manual](https://python-poetry.org/docs/basic-usage/) for more information.
 
 ### Dataset
 
