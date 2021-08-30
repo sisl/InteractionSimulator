@@ -81,14 +81,14 @@ class InteractionSimulator(gym.Env):
         # Get stacked vehicle trajectory
         if not svt:
             svt, filename = get_svt(loc, track)
-            print('Vehicle Trajectory Paths: {}'.format(filename))
+            logging.info('Vehicle Trajectory Paths: {}'.format(filename))
         else:
-            print('Custom Vehicle Trajectory Paths')
+            logging.info('Custom Vehicle Trajectory Paths')
             
         # Get map path
         if not map_path:
             map_path = get_map_path(loc)
-        print('Map Path: {}'.format(map_path))
+        logging.info('Map Path: {}'.format(map_path))
         
         # shuffle tracks
         self._shuffle_tracks = shuffle_tracks
@@ -321,7 +321,7 @@ class InteractionSimulator(gym.Env):
             raise Exception('Time: {}. Some cars receive nan actions'.format(t))
         action[~nna] = 0.
         if not self.action_space.contains(action):
-            print('Time: {}. Warning: requested action outside of bounds, being clamped'.format(t))
+            logging.warning('Time: {}. Requested action outside of bounds, being clamped'.format(t))
             action = action.clamp(self._min_acc, self._max_acc)
 
         # euler step the state
@@ -450,7 +450,7 @@ class InteractionSimulator(gym.Env):
         # rendering fields
         self._state_list = []
         self._graph_list = []
-        print('Environment Reset')
+        logging.info('Environment Reset')
 
         # generate info
         self.info.update({

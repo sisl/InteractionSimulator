@@ -149,7 +149,7 @@ def draw_map_without_lanelet(map_info, point_dict, axes):
         plt.plot(road_element['x_list'], road_element['y_list'], **type_dict)
 
     if len(unknown_linestring_types) != 0:
-        print("Found the following unknown types, did not plot them: " + str(unknown_linestring_types))
+        logging.warning("Found the following unknown types, did not plot them: " + str(unknown_linestring_types))
 
 def build_map(filename: str, lat_origin: float = 0., lon_origin: float = 0.):
     """
