@@ -257,11 +257,11 @@ class InteractionSimulator(gym.Env):
         # s[~nni] = np.nan
 
         deg = self._xpoly.shape[-1] - 1
-        expand_sims = powerseries(s, deg) # (nv, n, deg+1)
+        expand_sims = powerseries(s.type(torch.float64), deg) # (nv, n, deg+1)
         y = (self._ypoly.unsqueeze(1) * expand_sims).sum(dim=-1)
         x = (self._xpoly.unsqueeze(1) * expand_sims).sum(dim=-1)
 
-        expand_smax = powerseries(self.smax, deg)
+        expand_smax = powerseries(self.smax.type(torch.float64), deg)
         x_max = (self._xpoly * expand_smax).sum(dim=-1)
         y_max = (self._ypoly * expand_smax).sum(dim=-1)
 

@@ -7,7 +7,6 @@ from intersim.vehicletraj import StackedVehicleTraj
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
-torch.set_default_dtype(torch.float64)
 import os
 opj = os.path.join
 
@@ -112,8 +111,8 @@ def df_to_stackedvehicletraj(df, deg=20):
         # to tensors
         x = torch.tensor(x)
         y = torch.tensor(y)
-        v = torch.tensor(v)
-        s = torch.tensor(s)
+        v = torch.tensor(v).type(torch.get_default_dtype())
+        s = torch.tensor(s).type(torch.get_default_dtype())
 
         t0list.append(t0)
         slist.append(s)
@@ -145,8 +144,8 @@ def polyfit_sxy(s, x, y, deg=20):
         ypoly (torch.tensor): (nv, deg+1) coeffs of y(s)
     """
     nv = len(s)
-    xpoly = torch.zeros(nv, deg + 1).type(torch.get_default_dtype())
-    ypoly = torch.zeros(nv, deg + 1).type(torch.get_default_dtype())
+    xpoly = torch.zeros(nv, deg + 1)
+    ypoly = torch.zeros(nv, deg + 1)
     for i, (s_,x_,y_) in enumerate(zip(s,x,y)):
         s_ = s_.detach().numpy()
         x_ = x_.detach().numpy()
@@ -175,14 +174,14 @@ def ssdot_to_simstates(s, sdot,
     T = s.shape[0]
 
     simstates = torch.ones(T, nv, 5) * np.nan
-    expand_sims = powerseries(s, deg)
+    expand_sims = powerseries(s.type(torch.float64), deg)
 
-    x = (xpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    dxds = (dxpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    ddxds = (ddxpoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    y = (ypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    dyds = (dypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
-    ddyds = (ddypoly.unsqueeze(0)*expand_sims).sum(dim=-1)
+    x = (xpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    dxds = (dxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    ddxds = (ddxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    y = (ypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    dyds = (dypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
+    ddyds = (ddypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
 
     psi = torch.atan2(dyds,dxds)
 
