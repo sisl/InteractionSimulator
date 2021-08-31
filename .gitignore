@@ -133,3 +133,12 @@ dmypy.json
 
 # Datasets
 datasets/
+
+# Large files
+*.pt
+*.pkl
+
+# Test outputs
+tests/output/
+
+poetry.lock

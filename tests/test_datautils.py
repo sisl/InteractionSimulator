@@ -1,16 +1,16 @@
 # test_datautils.py
 
 import pandas as pd
-from intersim.datautils import *
+import intersim.utils as utils
 import matplotlib.pyplot as plt
 
 def main():
 
 	# load a trackfile
-	df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+	df = pd.read_csv(f'{utils.DATASET_DIR}/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
 
-	stv = df_to_stackedvehicletraj(df)
-	states = SVT_to_simstates(stv)
+	stv = utils.df_to_stackedvehicletraj(df)
+	states, _ = utils.SVT_to_stateactions(stv)
 
 	T,nv5 = states.shape
 	nv = nv5//5
