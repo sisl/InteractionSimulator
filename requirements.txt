@@ -5,3 +5,4 @@ gym
 sklearn
 pyproj
 shapely
+opencv-python

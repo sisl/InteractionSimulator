@@ -27,6 +27,7 @@ setup(
         "termcolor",
         "python_dateutil",
         "gym",
+        "opencv-python",
         "future",
         "sklearn",
         "pyproj",
