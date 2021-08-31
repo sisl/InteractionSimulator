@@ -9,7 +9,7 @@ import pickle
 from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt, powerseries
 from intersim import Box, StackedVehicleTraj, InteractionGraph
 from intersim.viz import animate, build_map
-from intersim.collisions import check_collisions
+from intersim.collisions import check_collisions, check_collisions_trajectory
 
 import gym
 from gym import error, spaces, utils
@@ -303,6 +303,46 @@ class InteractionSimulator(gym.Env):
         map_info, _ = build_map(self._map_path)
         return map_info
 
+    def _next_state(self, state, action):
+        """
+        Propagate the state forward a single step
+        Args:
+            state (torch.Tensor): (nv, 2) environment state (s, sdot)
+            action (torch.Tensor): (nv, 1) action (acceleration)
+        Returns:
+            next_state (torch.Tensor): (nv, 2) next environment state
+            action (torch.Tensor): (nv, 1) true action taken (acceleration)
+            exceeded (torch.Tensor): (nv,) bool tensor of cars which exceeded their track
+        """
+        # check for proper action input
+        # 1) make sure all non-nan states have actions
+        # 2) set actions for all nan state to 0
+        # 3) make sure final action is inside action space, if not clamp
+        
+        nns = ~torch.isnan(state[:,0]) 
+        nna = ~torch.isnan(action[:,0]) 
+        nns_na = nns & ~nna
+        if torch.any(nns_na):
+            raise Exception('Time: {}. Some cars receive nan actions'.format(self.t))
+        action[~nna] = 0.
+        if not self.action_space.contains(action):
+            logging.warning('Time: {}. Requested action outside of bounds, being clamped'.format(self.t))
+            action = action.clamp(self._min_acc, self._max_acc)
+
+        # euler step the state
+        nextv = state[:,1:2] + action * self._dt
+        nextv = nextv.clamp(0., np.inf) # not differentiable!
+        next_state = torch.zeros_like(state)
+        next_state[:,0:1] = state[:,0:1] + 0.5*self._dt*(nextv + state[:,1:2])
+        next_state[:,1:2] = nextv
+
+        # see which states exceeded their maxes
+        exceeded = (next_state[:,0] > self._svt.smax)
+        next_state[exceeded] = np.nan
+
+        return next_state, action, exceeded
+    
+    
     def step(self, action):
         """
         Step simulation forward 1 time-step.
@@ -318,38 +358,17 @@ class InteractionSimulator(gym.Env):
         action = action.clone()
         prev_state = self.projected_state.clone()
         self._ind += 1
-        t = self.t
-        # check for proper action input
-        # 1) make sure all non-nan states have actions
-        # 2) set actions for all nan state to 0
-        # 3) make sure final action is inside action space, if not clamp
-        
-        nns = ~torch.isnan(self._state[:,0]) 
-        nna = ~torch.isnan(action[:,0]) 
-        nns_na = nns & ~nna
-        if torch.any(nns_na):
-            raise Exception('Time: {}. Some cars receive nan actions'.format(t))
-        action[~nna] = 0.
-        if not self.action_space.contains(action):
-            logging.warning('Time: {}. Requested action outside of bounds, being clamped'.format(t))
-            action = action.clamp(self._min_acc, self._max_acc)
-
-        # euler step the state
-        nextv = self._state[:,1:2] + action * self._dt
-        nextv = nextv.clamp(0., np.inf) # not differentiable!
-        self._state[:,0:1] = self._state[:,0:1] + 0.5*self._dt*(nextv + self._state[:,1:2])
-        self._state[:,1:2] = nextv
-
-        # see which states exceeded their maxes
-        self._exceeded = (self._state[:,0] > self._svt.smax) | self._exceeded
-        self._state[self._exceeded] = np.nan
+        nns = ~torch.isnan(self._state[:,0])
+        next_state, action, exceeded = self._next_state(self._state.clone(), action)
+        self._state = next_state
+        self._exceeded = self._exceeded | exceeded
         self.done = torch.all(self._exceeded)
 
         # see which new vehicles should spawn
         
         # TODO: add an isFree checker 
         free = torch.tensor([True] * self._nv)
-        should_spawn = (self._svt.t0 <= t) & ~self._exceeded & ~nns & free
+        should_spawn = (self._svt.t0 <= self.t) & ~self._exceeded & ~nns & free
 
         # for now, just spawn them
         spawned = should_spawn
@@ -386,24 +405,39 @@ class InteractionSimulator(gym.Env):
     def check_future_collisions(self, actions):
         """
         Check whether there are collisions in future trajectories by propagating forward actions
-        
+        Args:
+            actions (list of torch.Tensor): list of B (T, nv, adims) T-length action profiles
+        Returns:
+            collisions (torch.Tensor): (B,) booleans for whether propagating actions will lead to a collision
         """
-        pass
+        B = len(actions)
+        states = self.propagate_action_profile(actions)
+        collisions = torch.zeros(B, dtype=torch.bool)
+        for iB in range(B):
+            collisions[iB] = torch.any(check_collisions_trajectory(states[iB], self._lengths, self._widths))
+        return collisions
 
     def propagate_action_profile(self, actions):
         """
         Take an joint action profile and propagate the current environment appropriately
         Args:
-            actions (torch.Tensor): (T, nv, adims) or (B, T, nv, adims) T-length action profiles
+            actions (list of torch.Tensor): list of B (T, nv, adims) T-length action profiles
         Returns:
-            states (torch.Tensor): (T, nv, sdims) or (B, T, nv, sdims) resulting projected states
+            states (list of torch.Tensor): list of B (T, nv, sdims) resulting projected states
         """
-        if actions.ndim == 4:
-            pass
-        elif actions.ndim == 3:
-            pass
-        else:
-            raise Exception('invalid action size')
+        states = []
+        for action in actions:
+            assert action.ndim == 3, 'Improper action dimension'
+            T, nv, adims = action.shape
+            x = torch.zeros(T, nv, 5)
+            state = self._state.clone()
+            for iT in range(T):
+                # propagate one step
+                state, _, _ =  self._next_state(state, action[iT])
+                x[iT] = self._project_state(state)
+            states.append(x)
+        
+        return states
             
     def target_state(self, ssdot, mu=0.):
         """
