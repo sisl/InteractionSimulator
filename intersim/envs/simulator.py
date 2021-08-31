@@ -413,8 +413,8 @@ class InteractionSimulator(gym.Env):
         B = len(actions)
         states = self.propagate_action_profile(actions)
         collisions = torch.zeros(B, dtype=torch.bool)
-        if iB in range(B):
-            collisions[iB] = check_collisions_trajectory(states[iB])
+        for iB in range(B):
+            collisions[iB] = torch.any(check_collisions_trajectory(states[iB], self._lengths, self._widths))
         return collisions
 
     def propagate_action_profile(self, actions):
@@ -428,7 +428,7 @@ class InteractionSimulator(gym.Env):
         states = []
         for action in actions:
             assert action.ndim == 3, 'Improper action dimension'
-            T, nv, adims = actions.shape
+            T, nv, adims = action.shape
             x = torch.zeros(T, nv, 5)
             state = self._state.clone()
             for iT in range(T):
