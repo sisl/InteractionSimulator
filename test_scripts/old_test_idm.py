@@ -1,7 +1,7 @@
 # test_idm.py
 
 import pandas as pd
-from intersim.datautils import *
+import intersim.utils as utils
 from intersim.policies.idm import IDM
 from intersim import RoundaboutSimulator
 import matplotlib.animation as animation
@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 def main():
 
     # load a trackfile
-    df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+    df = pd.read_csv(f'{utils.DATASET_DIR}/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
 
-    stv = df_to_stackedvehicletraj(df)
+    stv = utils.df_to_stackedvehicletraj(df)
 
     sim = RoundaboutSimulator(stv)
 
@@ -45,12 +45,12 @@ def main():
         )
     ax.set_aspect('equal', 'box')
 
-    osm = 'datasets/maps/DR_USA_Roundabout_FT.osm'
+    osm = f'utils.DATASET_DIR/maps/DR_USA_Roundabout_FT.osm'
 
     av = AnimatedViz(ax, osm, states, stv.lengths, stv.widths)
 
     ani = animation.FuncAnimation(fig, av.animate, frames=len(states),
-                   interval=20, blit=True, init_func=av.initfun, 
+                   interval=20, blit=True, init_func=av.initfun,
                    repeat=True)
 
     plt.show()

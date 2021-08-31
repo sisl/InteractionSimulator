@@ -1,7 +1,0 @@
-torch
-pandas
-matplotlib
-gym
-sklearn
-pyproj
-shapely
