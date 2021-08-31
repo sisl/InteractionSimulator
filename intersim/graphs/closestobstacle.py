@@ -46,7 +46,7 @@ class ClosestObstacleGraph(InteractionGraph):
         ndisth = dr * delpsi.sin()
         
         # now select the vehicles within distance and half-angle requirements
-        ndist_ = torch.where((ndist > 0) & (delpsi.abs() < self._half_angle*np.pi/180), ndist, np.inf)
+        ndist_ = torch.where((ndist > 0) & (delpsi.abs() < self._half_angle*np.pi/180), ndist, torch.tensor(np.inf))
 
         cndist, inds = ndist_.min(dim=-3)
         

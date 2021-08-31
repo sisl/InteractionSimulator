@@ -5,8 +5,28 @@ from intersim.graphs import ConeVisibilityGraph
 import torch
 cvg = ConeVisibilityGraph(r=20, half_angle=120)
 env = gym.make('intersim:intersim-v0', graph=cvg)
-env.reset()
+env2 = gym.make('intersim:intersim-v0', graph=cvg, mask_relstate=True)
 
+
+def test_mask_relstate():
+    env.reset()
+    env2.reset()
+    done = False
+    n_frames = 10
+    i = 0
+    while not done and i < n_frames:
+        env.render()
+        env2.render()
+        a = env.action_space.sample()
+        ob, r, done, info = env.step(a)
+        ob2, r, done, info = env2.step(a)
+        
+        nni = ~torch.isnan(ob['relative_state'][:,0,0])
+        nni2 = ~torch.isnan(ob['relative_state'][:,0,0])
+        assert sum(nni) >= sum(nni2), 'Masked relative state has more elements than relative state at frame %i' %(i)
+        i+=1
+    env.render()
+    env2.render()
 
 def test_relative_state():
     env.reset()

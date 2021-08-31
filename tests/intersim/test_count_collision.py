@@ -8,11 +8,13 @@ from intersim.collisions import count_collisions_trajectory, count_collisions, s
 import matplotlib.pyplot as plt
 import os
 opj = os.path.join
-def test():
-	outdir  = opj('tests','output')
-	if not os.path.isdir(outdir):
-		os.mkdir(outdir)
-	filestr = opj(outdir,'test_count_collision')
+outdir  = opj('tests','output')
+if not os.path.isdir(outdir):
+	os.mkdir(outdir)
+filestr = opj(outdir,'test_count_collision')
+
+def test_count_collision():
+	
 
 	torch.manual_seed(1)
 
@@ -42,10 +44,7 @@ def test():
 			plt.plot(x, y)
 			plt.text(pxT_, pyT_, '%.0f'%float(psiT_/np.pi * 180))
 
-		plt.savefig(filestr+'fig.jpg')
+		plt.savefig(filestr+'_fig.jpg')
 
 
 	# yup.
-
-if __name__ == '__main__':
-	test()

@@ -190,8 +190,18 @@ class InteractionSimulator(gym.Env):
         Returns:
             projstate (torch.tensor): (nv, 5) projected state
         """
+        return self._project_state(self._state)
+
+    def _project_state(self, state):
+        """
+        Project a state [s, v] to [x,y,v,psi,psidot]
+        Args:
+            state (torch.Tensor): (nv, 2) raw state
+        Returns:
+            projstate (torch.tensor): (nv, 5) projected state
+        """
         svt = self._svt
-        projstate = ssdot_to_simstates(self._state[:,0].unsqueeze(0),self._state[:,1].unsqueeze(0),
+        projstate = ssdot_to_simstates(state[:,0].unsqueeze(0), state[:,1].unsqueeze(0),
                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
         projstate = projstate[0]
@@ -373,11 +383,34 @@ class InteractionSimulator(gym.Env):
         reward = self._get_reward(projstate, action)
         return ob, reward, self.done, self.info   
     
-    def target_state(self, ssdot, mu=0):
+    def check_future_collisions(self, actions):
+        """
+        Check whether there are collisions in future trajectories by propagating forward actions
+        
+        """
+        pass
+
+    def propagate_action_profile(self, actions):
+        """
+        Take an joint action profile and propagate the current environment appropriately
+        Args:
+            actions (torch.Tensor): (T, nv, adims) or (B, T, nv, adims) T-length action profiles
+        Returns:
+            states (torch.Tensor): (T, nv, sdims) or (B, T, nv, sdims) resulting projected states
+        """
+        if actions.ndim == 4:
+            pass
+        elif actions.ndim == 3:
+            pass
+        else:
+            raise Exception('invalid action size')
+            
+    def target_state(self, ssdot, mu=0.):
         """
         Take an action to target a particular next state
         Args:
             ssdot (torch.Tensor): (nv, 2) tensor of next s and sdot to target
+            mu (float): regularizing coefficient on next s to target (to smooth accelerations)
         Returns:
             action (torch.Tensor): (nv, 1) tensor of ideal action to take
         """

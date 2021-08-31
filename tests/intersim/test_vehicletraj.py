@@ -3,7 +3,7 @@
 from intersim.vehicletraj import StackedVehicleTraj
 import torch
 
-def main():
+def test_vehicletraj():
 
 	t0 = torch.rand(50)
 	s = [torch.arange(10).float() for i in range(50)]
@@ -13,6 +13,5 @@ def main():
 	lengths = torch.rand(50)
 	widths = torch.rand(50)
 
-	StackedVehicleTraj(lengths, widths, t0, s, v, xpoly, ypoly)
-if __name__ == '__main__':
-	main()
+	# leave for now
+	#StackedVehicleTraj(lengths, widths, t0, s, v, xpoly, ypoly)
