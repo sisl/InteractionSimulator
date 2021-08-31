@@ -11,7 +11,13 @@ import os
 opj = os.path.join
 
 import intersim
-DATASET_BASE = os.path.normpath(os.path.join(os.path.dirname(intersim.__file__), '..'))
+
+DATASET_DIR = os.environ.get(
+    "INTERSIM_DATASET_DIR",
+    os.path.normpath(
+        os.path.join(os.path.dirname(intersim.__file__), "..", "datasets")
+    ),
+)
 
 LOCATIONS = [
     'DR_USA_Roundabout_FT',
@@ -21,25 +27,25 @@ LOCATIONS = [
     'DR_USA_Roundabout_SR'
 ]
 MAX_TRACKS=5
-def get_map_path(loc: int = 0, base: str = DATASET_BASE) -> str:
+def get_map_path(loc: int = 0, data_dir: str = DATASET_DIR) -> str:
     """
     Get path to .osm map file from location index
     Args:
         loc (int): location index
-        base (str): base path
+        data_dir (str): the directory containing all INTERACTION datasets.
     Returns:
         osm (str): path to .osm map file
     """
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
-    return opj(base, 'datasets','maps',LOCATIONS[loc]+'.osm')
+    return opj(data_dir, 'maps',LOCATIONS[loc]+'.osm')
 
-def get_svt(loc: int = 0, track: int = 0, base: str = DATASET_BASE, deg=20):
+def get_svt(loc: int = 0, track: int = 0, data_dir: str = DATASET_DIR, deg=20):
     """
     Load stacked vehicle trajectory from location and track indices
     Args:
         loc (int): location index
         track (int): track index
-        base (str): base path
+        data_dir (str): the directory containing all INTERACTION datasets.
         deg (int): polynomial degree for tracks
     Returns:
         svt (StackedVehicleTraj): stacked vehicle traj to base trajectories off of
@@ -47,7 +53,7 @@ def get_svt(loc: int = 0, track: int = 0, base: str = DATASET_BASE, deg=20):
     """
     assert loc >= 0 and loc < len(LOCATIONS), "Invalid location index {} not in [0,{}]".format(loc,len(LOCATIONS)-1)
     assert track >= 0 and track < MAX_TRACKS, "Invalid location index {} not in [0,{}]".format(track,MAX_TRACKS-1)
-    path = opj(base, 'datasets','trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
+    path = opj(data_dir, 'trackfiles',LOCATIONS[loc],'vehicle_tracks_%03i.csv'%(track))
     df = pd.read_csv(path)
     stv = df_to_stackedvehicletraj(df, deg=deg)
     return stv, path
@@ -55,10 +61,10 @@ def get_svt(loc: int = 0, track: int = 0, base: str = DATASET_BASE, deg=20):
 def to_circle(x):
         """
         Casts x (in rad) to [-pi, pi)
-        
+
         Args:
             x (torch.tensor): (*) input angles (radians)
-            
+
         Returns:
             y (torch.tensor): (*) x cast to [-pi, pi)
         """
@@ -157,8 +163,8 @@ def polyfit_sxy(s, x, y, deg=20):
 
     return xpoly, ypoly
 
-def ssdot_to_simstates(s, sdot, 
-                      xpoly, dxpoly, ddxpoly, 
+def ssdot_to_simstates(s, sdot,
+                      xpoly, dxpoly, ddxpoly,
                       ypoly, dypoly, ddypoly):
     """
     Maps s, sdot to [x,y,v,psi,psidot] using poly coefficients.
@@ -210,9 +216,9 @@ def ssdot_to_simactions(s, sdot, dt=0.1):
     # s(t+1) = s(t) +  0.5 * dt * (sdot(t+1) + sdot(t)) = s(t) + dt * sdot(t) + 0.5 * dt^2 * a(t)
 
     T, nv = s.shape
-    # Get a from s, ignore sdot, except for sdot(0) (this is what simulator does anyway) 
+    # Get a from s, ignore sdot, except for sdot(0) (this is what simulator does anyway)
     # TODO: filter accelerations better (e.g. states and velocities rather than just states)
-    # TODO: vectorize 
+    # TODO: vectorize
     adj_sdot = sdot.clone()
     simactions = torch.zeros(T-1, nv, 1) # * np.nan
     for car in range(nv):
@@ -241,18 +247,8 @@ def SVT_to_stateactions(svt: StackedVehicleTraj):
         sim_projected_states (torch.tensor): (T, nv, 5) states
         sim_actions (torch.tensor): (T-1, nv, 1) actions
     """
-    sim_projected_states = ssdot_to_simstates(svt.simstate[...,0], svt.simstate[...,1], 
+    sim_projected_states = ssdot_to_simstates(svt.simstate[...,0], svt.simstate[...,1],
                                 svt.xpoly, svt.dxpoly, svt.ddxpoly,
                                 svt.ypoly, svt.dypoly, svt.ddypoly)
     sim_actions = ssdot_to_simactions(svt.simstate[...,0], svt.simstate[...,1])
     return sim_projected_states, sim_actions
-
-
-
-
-
-
-
-
-
-

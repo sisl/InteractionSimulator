@@ -1,15 +1,15 @@
 # test_datautils.py
 
 import pandas as pd
-from intersim.utils import *
+from intersim import utils
 
 def test_datautils():
 
 	# load a trackfile
-	df = pd.read_csv('datasets/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
+	df = pd.read_csv(f'{utils.DATASET_DIR}/trackfiles/DR_USA_Roundabout_FT/vehicle_tracks_000.csv')
 
-	svt = df_to_stackedvehicletraj(df)
-	states, actions = SVT_to_stateactions(svt)
+	svt = utils.df_to_stackedvehicletraj(df)
+	states, actions = utils.SVT_to_stateactions(svt)
 
 	T,nv,_ = states.shape
 
@@ -37,4 +37,4 @@ def test_datautils():
 
 
 if __name__ == '__main__':
-	main()
+	test_datautils()
