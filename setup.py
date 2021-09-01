@@ -8,12 +8,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="intersim",
-    version="0.0.2",
+    version="0.0.3",
     packages=find_packages(),
     description="Simulator environment for INTERACTION driving dataset",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Kunal Menda, Arec Jamgochian",
+    author="Arec Jamgochian, Etienne Buehrle, Johannes Fischer, Kunal Menda",
     author_email="jamgochian95@gmail.com",
     url="https://github.com/sisl/InteractionSimulator",
     install_requires=[
@@ -27,6 +27,8 @@ setup(
         "termcolor",
         "python_dateutil",
         "gym",
+        "opencv-python",
+        "celluloid",
         "future",
         "sklearn",
         "pyproj",
