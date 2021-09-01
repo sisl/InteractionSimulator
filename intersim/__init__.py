@@ -11,3 +11,7 @@ register(
     id='intersim-v0',
     entry_point='intersim.envs:InteractionSimulator',
 )
+register(
+    id='intersimple-v0',
+    entry_point='intersim.envs:Intersimple',
+)
