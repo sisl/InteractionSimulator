@@ -193,9 +193,11 @@ class FlatObservation:
 
 class RasterizedObservation:
 
-    def __init__(self, height=200, width=200, *args, **kwargs):
+    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, height, width), dtype=np.uint8)
+        self._m_per_px = m_per_px
+        self._raster_fixpoint = raster_fixpoint
 
     def _rasterize(self, intersim_obs, intersim_info):
         canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
@@ -207,8 +209,8 @@ class RasterizedObservation:
             logging.warning(f'Agent {self._agent} has partially invalid ego state {intersim_obs["state"][self._agent]} at time step {self._env._ind}.')
         
         rasta = Rasta(
-            m_per_px = 0.5,
-            raster_fixpoint = (0.5, 0.5),
+            m_per_px = self._m_per_px,
+            raster_fixpoint = self._raster_fixpoint,
             world_fixpoint = intersim_obs['state'][self._agent, :2],
             camera_rotation = intersim_obs['state'][self._agent, 3]
         )
@@ -253,8 +255,8 @@ class RasterizedObservation:
 
 class RasterizedNObservations(RasterizedObservation):
     
-    def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, *args, **kwargs):
-        super().__init__(height=height, width=width, *args, **kwargs)
+    def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+        super().__init__(height=height, width=width, m_per_px=m_per_px, raster_fixpoint=raster_fixpoint, *args, **kwargs)
         self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, height, width), dtype=np.uint8)
         self._skip_frames = skip_frames
         self._n_frames = n_frames
