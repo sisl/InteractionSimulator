@@ -309,10 +309,11 @@ class RasterizedNObservations(RasterizedObservation):
     
     def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
         super().__init__(height=height, width=width, m_per_px=m_per_px, raster_fixpoint=raster_fixpoint, *args, **kwargs)
-        self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, height, width), dtype=np.uint8)
+        n_channels, _, _ = self.observation_space.shape
+        self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, n_channels, height, width), dtype=np.uint8)
         self._skip_frames = skip_frames
         self._n_frames = n_frames
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(n_frames, height, width), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(n_frames * n_channels, height, width), dtype=np.uint8)
     
     def reset(self):
         self._framebuffer *= 0
@@ -321,8 +322,10 @@ class RasterizedNObservations(RasterizedObservation):
     def _simple_obs(self, intersim_obs, intersim_info):
         last_frame = super()._simple_obs(intersim_obs, intersim_info)
         self._framebuffer = np.roll(self._framebuffer, shift=1, axis=0)
-        self._framebuffer[0] = last_frame[0]
-        return self._framebuffer[self._skip_frames * np.arange(self._n_frames)]
+        self._framebuffer[0] = last_frame
+        frames = self._framebuffer[self._skip_frames * np.arange(self._n_frames)]
+        frames_flat = np.reshape(frames, self.observation_space.shape)
+        return frames_flat
 
 
 class ImageObservationAnimation:
