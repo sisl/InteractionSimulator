@@ -274,7 +274,7 @@ class RasterizedRoute:
         self._m_per_px = m_per_px
         self._raster_fixpoint = raster_fixpoint
 
-    def _rasterize(self, intersim_obs, intersim_info):
+    def _rasterize_route(self, intersim_obs, intersim_info):
         canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
 
         if intersim_obs['state'][self._agent].isnan().all():
@@ -290,8 +290,8 @@ class RasterizedRoute:
         )
 
         ego_route = np.stack((
-            intersim_info['paths'][0][self._agent],
-            intersim_info['paths'][1][self._agent],
+            intersim_obs['paths'][0][self._agent],
+            intersim_obs['paths'][1][self._agent],
         ), axis=-1)
 
         rasta.polylines(canvas, ego_route, color=255)
@@ -299,20 +299,23 @@ class RasterizedRoute:
         return canvas[np.newaxis]
 
     def _simple_obs(self, intersim_obs, intersim_info):
-        img = super()._rasterize(intersim_obs, intersim_info)
-        route = self._rasterize(intersim_obs, intersim_info)
+        img = super()._simple_obs(intersim_obs, intersim_info)
+        route = self._rasterize_route(intersim_obs, intersim_info)
         obs = np.concatenate((route, img), axis=0)
         return obs
 
 
 class RasterizedNObservations(RasterizedObservation):
-    
+
     def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
         super().__init__(height=height, width=width, m_per_px=m_per_px, raster_fixpoint=raster_fixpoint, *args, **kwargs)
         n_channels, _, _ = self.observation_space.shape
         self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, n_channels, height, width), dtype=np.uint8)
         self._skip_frames = skip_frames
         self._n_frames = n_frames
+        self._n_channels = n_channels
+        self._height = height
+        self._width = width
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(n_frames * n_channels, height, width), dtype=np.uint8)
     
     def reset(self):
@@ -324,7 +327,7 @@ class RasterizedNObservations(RasterizedObservation):
         self._framebuffer = np.roll(self._framebuffer, shift=1, axis=0)
         self._framebuffer[0] = last_frame
         frames = self._framebuffer[self._skip_frames * np.arange(self._n_frames)]
-        frames_flat = np.reshape(frames, self.observation_space.shape)
+        frames_flat = np.reshape(frames, (self._n_frames * self._n_channels, self._height, self._width))
         return frames_flat
 
 
@@ -522,6 +525,10 @@ class IntersimpleRasterized(RewardVisualization, Reward, ImageObservationAnimati
     pass
 
 class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, RasterizedNObservations,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
