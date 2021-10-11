@@ -253,6 +253,58 @@ class RasterizedObservation:
         return self._rasterize(intersim_obs, intersim_info)
 
 
+class RasterizedRoute:
+
+    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+        super().__init__(
+            height=height,
+            width=width,
+            m_per_px=m_per_px,
+            raster_fixpoint=raster_fixpoint,
+            *args,
+            **kwargs
+        )
+        channels, _, _ = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=(channels+1, height, width),
+            dtype=np.uint8
+        )
+        self._m_per_px = m_per_px
+        self._raster_fixpoint = raster_fixpoint
+
+    def _rasterize(self, intersim_obs, intersim_info):
+        canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
+
+        if intersim_obs['state'][self._agent].isnan().all():
+            return canvas[np.newaxis]
+        
+        assert not intersim_obs['state'][self._agent].isnan().any(), f'Agent {self._agent} has partially invalid ego state {intersim_obs["state"][self._agent]} at time step {self._env._ind}.'
+        
+        rasta = Rasta(
+            m_per_px = self._m_per_px,
+            raster_fixpoint = self._raster_fixpoint,
+            world_fixpoint = intersim_obs['state'][self._agent, :2],
+            camera_rotation = intersim_obs['state'][self._agent, 3]
+        )
+
+        ego_route = np.stack((
+            intersim_info['paths'][0][self._agent],
+            intersim_info['paths'][1][self._agent],
+        ), axis=-1)
+
+        rasta.polylines(canvas, ego_route, color=255)
+
+        return canvas[np.newaxis]
+
+    def _simple_obs(self, intersim_obs, intersim_info):
+        img = super()._rasterize(intersim_obs, intersim_info)
+        route = self._rasterize(intersim_obs, intersim_info)
+        obs = np.concatenate((route, img), axis=0)
+        return obs
+
+
 class RasterizedNObservations(RasterizedObservation):
     
     def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
