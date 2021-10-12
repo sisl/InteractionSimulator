@@ -255,7 +255,7 @@ class RasterizedObservation:
 
 class RasterizedRoute:
 
-    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+    def __init__(self, route_thickness=2, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
         super().__init__(
             height=height,
             width=width,
@@ -273,6 +273,7 @@ class RasterizedRoute:
         )
         self._m_per_px = m_per_px
         self._raster_fixpoint = raster_fixpoint
+        self._route_thickness = route_thickness
 
     def _rasterize_route(self, intersim_obs, intersim_info):
         canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
@@ -294,7 +295,7 @@ class RasterizedRoute:
             intersim_obs['paths'][1][self._agent],
         ), axis=-1)
 
-        rasta.polylines(canvas, ego_route, color=255)
+        rasta.polylines(canvas, ego_route, thickness=self._route_thickness, color=255)
 
         return canvas[np.newaxis]
 
