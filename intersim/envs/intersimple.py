@@ -306,11 +306,11 @@ class RasterizedRoute:
         return obs
 
 
-class RasterizedNObservations(RasterizedObservation):
+class NObservations:
 
-    def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
-        super().__init__(height=height, width=width, m_per_px=m_per_px, raster_fixpoint=raster_fixpoint, *args, **kwargs)
-        n_channels, _, _ = self.observation_space.shape
+    def __init__(self, n_frames=5, skip_frames=1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        n_channels, height, width = self.observation_space.shape
         self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, n_channels, height, width), dtype=np.uint8)
         self._skip_frames = skip_frames
         self._n_frames = n_frames
@@ -525,14 +525,14 @@ class IntersimpleRasterized(RewardVisualization, Reward, ImageObservationAnimati
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
+class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, RasterizedNObservations,
+class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
+class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
