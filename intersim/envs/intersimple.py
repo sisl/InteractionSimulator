@@ -16,6 +16,7 @@ class Intersimple(gym.Env):
         super().__init__()
         self._env = gym.make('intersim:intersim-v0', *args, **kwargs)
         self._env._mode = None # TODO: move this to intersim
+        self.nv = self._env._nv
 
         self._agent = 0
         self._n_obs = n_obs
@@ -96,7 +97,7 @@ class Intersimple(gym.Env):
             next_state = self._env._svt.simstate[self._env._ind + 1]
             gt_action = self._env.target_state(next_state)
         else:
-            gt_action = torch.ones((self._env._nv, 1))
+            gt_action = torch.ones((self.nv, 1))
 
         gt_action[self._agent] = torch.tensor(action)
         observation, reward, done, info = self._env.step(gt_action)
@@ -406,7 +407,17 @@ class FixedAgent:
 class RandomAgent:
 
     def reset(self):
-        self._agent = random.randrange(self._env._nv)
+        self._agent = random.randrange(self.nv)
+        return super().reset()
+
+class IncrementingAgent:
+    
+    def __init__(self, start_agent=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._agent = (start_agent - 1) %  self.nv # assuming going to call reset after initializing environment
+
+    def reset(self):
+        self._agent = (self._agent + 1) %  self.nv # increment agent number
         return super().reset()
 
 
@@ -534,5 +545,9 @@ class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservation
     pass
 
 class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass

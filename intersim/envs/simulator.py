@@ -326,7 +326,7 @@ class InteractionSimulator(gym.Env):
             raise Exception('Time: {}. Some cars receive nan actions'.format(self.t))
         action[~nna] = 0.
         if not self.action_space.contains(action):
-            logging.warning('Time: {}. Requested action outside of bounds, being clamped'.format(self.t))
+            logging.info('Time: {}. Requested action outside of bounds, being clamped'.format(self.t))
             action = action.clamp(self._min_acc, self._max_acc)
 
         # euler step the state
