@@ -6,13 +6,13 @@ import torch
 import numpy as np
 from shapely.geometry import Polygon
 
-def state_to_polygon(x, li, wi):
+def state_to_polygon(x, length, width):
     """
     Create a polygons representing a single vehicle.
     Args:
         x (torch.tensor): (5,) vehicle state
-        li (torch.tensor): zero-dim tensor of vehicle length
-        wi (torch.tensor): zero-dim tensor of vehicle width
+        length (torch.tensor): () vehicle length
+        width (torch.tensor): () vehicle width
     Returns
         p (Polygon): vehicle Polygon
     """
@@ -22,30 +22,6 @@ def state_to_polygon(x, li, wi):
     c, s = psi.cos(), psi.sin()
     lon = torch.stack([c, s])
     lat = torch.stack([-s, c])
-    
-    ul = pxy + li/2. * lon + wi/2. * lat
-    ur = pxy + li/2. * lon - wi/2. * lat
-    ll = pxy - li/2. * lon + wi/2. * lat
-    lr = pxy - li/2. * lon - wi/2. * lat
-    
-    corners = torch.stack([ll, lr, ur, ul]).detach().numpy()
-    return Polygon([*corners])
-
-def state_to_polygon(x, length, width):
-    """
-    Create a polygon for a vehicle active vehicle.
-    Args:
-        x (torch.tensor): (5) vehicle state
-        length (torch.tensor): () vehicle length
-        width (torch.tensor): () vehicle width
-    Returns
-        p (Polygon): vehicle Polygons
-    """
-    px, py, v, psi, psidot = x
-
-    pxy = torch.stack([px, py])
-    lon = torch.stack([psi.cos(), psi.sin()])
-    lat = torch.stack([-psi.sin(), psi.cos()])
     
     ul = pxy + length/2. * lon + width/2. * lat
     ur = pxy + length/2. * lon - width/2. * lat
