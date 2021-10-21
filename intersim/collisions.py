@@ -6,14 +6,38 @@ import torch
 import numpy as np
 from shapely.geometry import Polygon
 
+def state_to_polygon(x, li, wi):
+    """
+    Create a polygons representing a single vehicle.
+    Args:
+        x (torch.tensor): (5,) vehicle state
+        li (torch.tensor): zero-dim tensor of vehicle length
+        wi (torch.tensor): zero-dim tensor of vehicle width
+    Returns
+        p (Polygon): vehicle Polygon
+    """
+    px, py, v, psi, psidot = x
+
+    pxy = torch.stack([px, py])
+    c, s = psi.cos(), psi.sin()
+    lon = torch.stack([c, s])
+    lat = torch.stack([-s, c])
+    
+    ul = pxy + li/2. * lon + wi/2. * lat
+    ur = pxy + li/2. * lon - wi/2. * lat
+    ll = pxy - li/2. * lon + wi/2. * lat
+    lr = pxy - li/2. * lon - wi/2. * lat
+    
+    corners = torch.stack([ll, lr, ur, ul]).detach().numpy()
+    return Polygon([*corners])
 
 def states_to_polygons(x, lengths, widths):
     """
     Create a set of polygons representing each active vehicle.
     Args:
         x (torch.tensor): (nv, 5) vehicle states
-        legnths (torch.tensor): (nv,) vehicle lengths
-        widths (torch.tensor): (nv,) vehicle lengths
+        lengths (torch.tensor): (nv,) vehicle lengths
+        widths (torch.tensor): (nv,) vehicle widths
     Returns
         vp (list of Polygon): (nv_active,) vehicle Polygons
         inds (torch.tensor): (n,) indices of active vehicles
@@ -22,19 +46,7 @@ def states_to_polygons(x, lengths, widths):
     nni = ~torch.isnan(x[:,0])
     vp = []
     for  x_, li, wi in zip(x[nni], lengths[nni], widths[nni]):
-        px, py, v, psi, psidot = x_
-
-        pxy = torch.stack([px, py])
-        lon = torch.stack([psi.cos(), psi.sin()])
-        lat = torch.stack([-psi.sin(), psi.cos()])
-        
-        ul = pxy + li/2. * lon + wi/2. * lat
-        ur = pxy + li/2. * lon - wi/2. * lat
-        ll = pxy - li/2. * lon + wi/2. * lat
-        lr = pxy - li/2. * lon - wi/2. * lat
-        
-        corners = torch.stack([ll, lr, ur, ul]).detach().numpy()
-        p = Polygon([*corners])
+        p = state_to_polygon(x_, li, wi)
         vp.append(p)
     inds = torch.where(nni)[0]
     return vp, inds
