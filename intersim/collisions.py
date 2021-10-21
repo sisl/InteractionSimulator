@@ -31,6 +31,31 @@ def state_to_polygon(x, li, wi):
     corners = torch.stack([ll, lr, ur, ul]).detach().numpy()
     return Polygon([*corners])
 
+def state_to_polygon(x, length, width):
+    """
+    Create a polygon for a vehicle active vehicle.
+    Args:
+        x (torch.tensor): (5) vehicle state
+        length (torch.tensor): () vehicle length
+        width (torch.tensor): () vehicle width
+    Returns
+        p (Polygon): vehicle Polygons
+    """
+    px, py, v, psi, psidot = x
+
+    pxy = torch.stack([px, py])
+    lon = torch.stack([psi.cos(), psi.sin()])
+    lat = torch.stack([-psi.sin(), psi.cos()])
+    
+    ul = pxy + length/2. * lon + width/2. * lat
+    ur = pxy + length/2. * lon - width/2. * lat
+    ll = pxy - length/2. * lon + width/2. * lat
+    lr = pxy - length/2. * lon - width/2. * lat
+    
+    corners = torch.stack([ll, lr, ur, ul]).detach().numpy()
+    p = Polygon([*corners])
+    return p
+
 def states_to_polygons(x, lengths, widths):
     """
     Create a set of polygons representing each active vehicle.

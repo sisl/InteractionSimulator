@@ -16,6 +16,7 @@ class Intersimple(gym.Env):
         super().__init__()
         self._env = gym.make('intersim:intersim-v0', *args, **kwargs)
         self._env._mode = None # TODO: move this to intersim
+        self.nv = self._env._nv
 
         self._agent = 0
         self._n_obs = n_obs
@@ -96,7 +97,7 @@ class Intersimple(gym.Env):
             next_state = self._env._svt.simstate[self._env._ind + 1]
             gt_action = self._env.target_state(next_state)
         else:
-            gt_action = torch.ones((self._env._nv, 1))
+            gt_action = torch.ones((self.nv, 1))
 
         gt_action[self._agent] = torch.tensor(action)
         observation, reward, done, info = self._env.step(gt_action)
@@ -253,14 +254,71 @@ class RasterizedObservation:
         return self._rasterize(intersim_obs, intersim_info)
 
 
-class RasterizedNObservations(RasterizedObservation):
-    
-    def __init__(self, n_frames=5, skip_frames=1, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
-        super().__init__(height=height, width=width, m_per_px=m_per_px, raster_fixpoint=raster_fixpoint, *args, **kwargs)
-        self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, height, width), dtype=np.uint8)
+class RasterizedRoute:
+
+    def __init__(self, route_thickness=2, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+        super().__init__(
+            height=height,
+            width=width,
+            m_per_px=m_per_px,
+            raster_fixpoint=raster_fixpoint,
+            *args,
+            **kwargs
+        )
+        channels, _, _ = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=(channels+1, height, width),
+            dtype=np.uint8
+        )
+        self._m_per_px = m_per_px
+        self._raster_fixpoint = raster_fixpoint
+        self._route_thickness = route_thickness
+
+    def _rasterize_route(self, intersim_obs, intersim_info):
+        canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
+
+        if intersim_obs['state'][self._agent].isnan().all():
+            return canvas[np.newaxis]
+        
+        assert not intersim_obs['state'][self._agent].isnan().any(), f'Agent {self._agent} has partially invalid ego state {intersim_obs["state"][self._agent]} at time step {self._env._ind}.'
+        
+        rasta = Rasta(
+            m_per_px = self._m_per_px,
+            raster_fixpoint = self._raster_fixpoint,
+            world_fixpoint = intersim_obs['state'][self._agent, :2],
+            camera_rotation = intersim_obs['state'][self._agent, 3]
+        )
+
+        ego_route = np.stack((
+            intersim_obs['paths'][0][self._agent],
+            intersim_obs['paths'][1][self._agent],
+        ), axis=-1)
+
+        rasta.polylines(canvas, ego_route, thickness=self._route_thickness, color=255)
+
+        return canvas[np.newaxis]
+
+    def _simple_obs(self, intersim_obs, intersim_info):
+        img = super()._simple_obs(intersim_obs, intersim_info)
+        route = self._rasterize_route(intersim_obs, intersim_info)
+        obs = np.concatenate((route, img), axis=0)
+        return obs
+
+
+class NObservations:
+
+    def __init__(self, n_frames=5, skip_frames=1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        n_channels, height, width = self.observation_space.shape
+        self._framebuffer = np.zeros(((n_frames - 1) * skip_frames + 1, n_channels, height, width), dtype=np.uint8)
         self._skip_frames = skip_frames
         self._n_frames = n_frames
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(n_frames, height, width), dtype=np.uint8)
+        self._n_channels = n_channels
+        self._height = height
+        self._width = width
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(n_frames * n_channels, height, width), dtype=np.uint8)
     
     def reset(self):
         self._framebuffer *= 0
@@ -269,8 +327,10 @@ class RasterizedNObservations(RasterizedObservation):
     def _simple_obs(self, intersim_obs, intersim_info):
         last_frame = super()._simple_obs(intersim_obs, intersim_info)
         self._framebuffer = np.roll(self._framebuffer, shift=1, axis=0)
-        self._framebuffer[0] = last_frame[0]
-        return self._framebuffer[self._skip_frames * np.arange(self._n_frames)]
+        self._framebuffer[0] = last_frame
+        frames = self._framebuffer[self._skip_frames * np.arange(self._n_frames)]
+        frames_flat = np.reshape(frames, (self._n_frames * self._n_channels, self._height, self._width))
+        return frames_flat
 
 
 class ImageObservationAnimation:
@@ -347,7 +407,17 @@ class FixedAgent:
 class RandomAgent:
 
     def reset(self):
-        self._agent = random.randrange(self._env._nv)
+        self._agent = random.randrange(self.nv)
+        return super().reset()
+
+class IncrementingAgent:
+    
+    def __init__(self, start_agent=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._agent = (start_agent - 1) %  self.nv # assuming going to call reset after initializing environment
+
+    def reset(self):
+        self._agent = (self._agent + 1) %  self.nv # increment agent number
         return super().reset()
 
 
@@ -466,10 +536,18 @@ class IntersimpleRasterized(RewardVisualization, Reward, ImageObservationAnimati
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
+class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedNObservations,
+class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
