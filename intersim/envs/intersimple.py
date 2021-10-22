@@ -548,6 +548,6 @@ class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObse
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
 
-class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedObservation,
+class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
