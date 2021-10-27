@@ -8,6 +8,7 @@ from intersim.viz import make_action_viz, make_marker_viz, make_observation_viz,
 import functools
 import matplotlib.pyplot as plt
 from celluloid import Camera
+from intersim.utils import LOCATIONS, MAX_TRACKS
 
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation."""
@@ -194,11 +195,13 @@ class FlatObservation:
 
 class RasterizedObservation:
 
-    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), map_color=255, vehicle_color=255, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, height, width), dtype=np.uint8)
         self._m_per_px = m_per_px
         self._raster_fixpoint = raster_fixpoint
+        self._map_color = map_color
+        self._vehicle_color = vehicle_color
 
     def _rasterize(self, intersim_obs, intersim_info):
         canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
@@ -223,7 +226,7 @@ class RasterizedObservation:
             length=intersim_info['lengths'][self._agent],
             width=intersim_info['widths'][self._agent],
             rotation=intersim_obs['state'][self._agent, 3],
-            color=255,
+            color=self._vehicle_color,
         )
 
         # Draw other agents
@@ -235,7 +238,7 @@ class RasterizedObservation:
             length=intersim_info['lengths'][valid],
             width=intersim_info['widths'][valid],
             rotation=intersim_obs['state'][self._agent, 3] + intersim_obs['relative_state'][self._agent, valid, 4],
-            color=255,
+            color=self._vehicle_color,
         )
 
         # Draw map
@@ -246,7 +249,7 @@ class RasterizedObservation:
                     road_element['x_list'],
                     road_element['y_list'],
                 ), -1)
-                rasta.polylines(canvas, vertices, color=255)
+                rasta.polylines(canvas, vertices, color=self._map_color)
 
         return canvas[np.newaxis]
 
@@ -410,6 +413,7 @@ class RandomAgent:
         self._agent = random.randrange(self.nv)
         return super().reset()
 
+
 class IncrementingAgent:
     
     def __init__(self, start_agent=0, *args, **kwargs):
@@ -418,6 +422,43 @@ class IncrementingAgent:
 
     def reset(self):
         self._agent = (self._agent + 1) %  self.nv # increment agent number
+        return super().reset()
+
+
+class FixedLocation:
+
+    def __init__(self, loc=0, track=0, *args, **kwargs):
+        self._location = loc
+        self._track = track
+        super().__init__(loc=loc, track=track, *args, **kwargs)
+
+
+class RandomLocation:
+    
+    records = [(l, t) for l in range(len(LOCATIONS)) for t in range(MAX_TRACKS)]
+    # see tests.intersim.envs.test_simulator.test_locations
+    records.remove((1, 4))
+    records.remove((2, 3))
+
+    def __init__(self, loc=0, track=0, *args, **kwargs):
+        self._location = loc
+        self._track = track
+        self._args = args
+        self._kwargs = kwargs
+        super().__init__(loc=loc, track=track, *args, **kwargs)
+
+    def reset(self):
+        self._location, self._track = random.choice(RandomLocation.records)
+
+        logging.info(f'location {self._location}, track {self._track}')
+
+        self.__init__(
+            loc=self._location,
+            track=self._track,
+            *self._args,
+            **self._kwargs,
+        )
+        
         return super().reset()
 
 
@@ -553,5 +594,9 @@ class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Rewar
     pass
 
 class NRasterizedRouteRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedRouteRandomAgentLocation(RandomLocation, RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass
