@@ -8,6 +8,7 @@ from intersim.viz import make_action_viz, make_marker_viz, make_observation_viz,
 import functools
 import matplotlib.pyplot as plt
 from celluloid import Camera
+from intersim.utils import LOCATIONS, MAX_TRACKS
 
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation."""
@@ -412,6 +413,7 @@ class RandomAgent:
         self._agent = random.randrange(self.nv)
         return super().reset()
 
+
 class IncrementingAgent:
     
     def __init__(self, start_agent=0, *args, **kwargs):
@@ -420,6 +422,43 @@ class IncrementingAgent:
 
     def reset(self):
         self._agent = (self._agent + 1) %  self.nv # increment agent number
+        return super().reset()
+
+
+class FixedLocation:
+
+    def __init__(self, loc=0, track=0, *args, **kwargs):
+        self._location = loc
+        self._track = track
+        super().__init__(loc=loc, track=track, *args, **kwargs)
+
+
+class RandomLocation:
+    
+    records = [(l, t) for l in range(len(LOCATIONS)) for t in range(MAX_TRACKS)]
+    # see tests.intersim.envs.test_simulator.test_locations
+    records.remove((1, 4))
+    records.remove((2, 3))
+
+    def __init__(self, loc=0, track=0, *args, **kwargs):
+        self._location = loc
+        self._track = track
+        self._args = args
+        self._kwargs = kwargs
+        super().__init__(loc=loc, track=track, *args, **kwargs)
+
+    def reset(self):
+        self._location, self._track = random.choice(RandomLocation.records)
+
+        logging.info(f'location {self._location}, track {self._track}')
+
+        self.__init__(
+            loc=self._location,
+            track=self._track,
+            *self._args,
+            **self._kwargs,
+        )
+        
         return super().reset()
 
 
@@ -555,5 +594,9 @@ class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Rewar
     pass
 
 class NRasterizedRouteRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedRouteRandomAgentLocation(RandomLocation, RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     pass

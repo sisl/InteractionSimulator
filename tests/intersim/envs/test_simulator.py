@@ -1,5 +1,5 @@
 import gym
-from intersim.utils import df_to_stackedvehicletraj
+from intersim.utils import LOCATIONS, MAX_TRACKS, df_to_stackedvehicletraj
 from intersim.graphs import ConeVisibilityGraph
 
 import torch
@@ -60,3 +60,16 @@ def test_generate_paths():
     xpath, ypath = xpath[existing_tracks], ypath[existing_tracks]
     assert ~torch.any(torch.isnan(xpath))
     assert ~torch.any(torch.isnan(ypath))
+
+def test_locations():
+    locations = len(LOCATIONS)
+    tracks = MAX_TRACKS
+
+    records = set((l, t) for l in range(locations) for t in range(tracks))
+    records.remove((1, 4)) # currently crashing
+    records.remove((2, 3)) # currently crashing
+
+    for loc, track in records:
+        print(f'loc {loc} track {track}')
+        env = gym.make('intersim:intersim-v0', loc=loc, track=track)
+        env.reset()
