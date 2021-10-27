@@ -194,11 +194,13 @@ class FlatObservation:
 
 class RasterizedObservation:
 
-    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
+    def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), map_color=255, vehicle_color=255, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, height, width), dtype=np.uint8)
         self._m_per_px = m_per_px
         self._raster_fixpoint = raster_fixpoint
+        self._map_color = map_color
+        self._vehicle_color = vehicle_color
 
     def _rasterize(self, intersim_obs, intersim_info):
         canvas = np.zeros(self.observation_space.shape[-2:], dtype=np.uint8)
@@ -223,7 +225,7 @@ class RasterizedObservation:
             length=intersim_info['lengths'][self._agent],
             width=intersim_info['widths'][self._agent],
             rotation=intersim_obs['state'][self._agent, 3],
-            color=255,
+            color=self._vehicle_color,
         )
 
         # Draw other agents
@@ -235,7 +237,7 @@ class RasterizedObservation:
             length=intersim_info['lengths'][valid],
             width=intersim_info['widths'][valid],
             rotation=intersim_obs['state'][self._agent, 3] + intersim_obs['relative_state'][self._agent, valid, 4],
-            color=255,
+            color=self._vehicle_color,
         )
 
         # Draw map
@@ -246,7 +248,7 @@ class RasterizedObservation:
                     road_element['x_list'],
                     road_element['y_list'],
                 ), -1)
-                rasta.polylines(canvas, vertices, color=255)
+                rasta.polylines(canvas, vertices, color=self._map_color)
 
         return canvas[np.newaxis]
 
