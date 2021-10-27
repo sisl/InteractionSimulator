@@ -155,8 +155,8 @@ class Reward:
         state = self._env.projected_state[self._agent]
         obs, _, done, info = super().step(action)
 
-        collision = done and not self._env._exceeded[self._agent]
-        info.update({ 'collision': collision })
+        # collision = done and not self._env._exceeded[self._agent]
+        # info.update({ 'collision': collision })
         
         # base reward on current state to avoid passing nan's
         reward = self._reward(state, action, info)

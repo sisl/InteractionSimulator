@@ -377,10 +377,12 @@ class InteractionSimulator(gym.Env):
         
         projstate = self.projected_state
 
+        self.info.update({'collision': False})
         # if terminating on collision, check for collisions
         if self._stop_on_collision:
             if check_collisions(projstate, self._lengths, self._widths):
                 self.done = True 
+                self.info.update({'collision': True})
 
         # update interaction graph
         self._graph.update_graph(projstate)
@@ -391,6 +393,7 @@ class InteractionSimulator(gym.Env):
             'should_spawn': np.argwhere(should_spawn.detach().numpy()).flatten(),
             'spawned': np.argwhere(spawned.detach().numpy()).flatten(),
             'raw_state': self._state.clone(),
+            'projected_state': self.projected_state.clone(),
             'prev_state': prev_state,
             'action_taken': action.clone()
         })
