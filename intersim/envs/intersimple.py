@@ -543,6 +543,7 @@ class InfoFilter:
         observation, reward, done, full_info = super().step(action)
         info_keys = [
             'projected_state',
+            'action_taken',
             'agent'
         ]
         info = {k: full_info[k] for k in info_keys}
