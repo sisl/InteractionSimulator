@@ -9,6 +9,7 @@ import functools
 import matplotlib.pyplot as plt
 from celluloid import Camera
 from intersim.utils import LOCATIONS, MAX_TRACKS
+import logging
 
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation."""
@@ -539,14 +540,26 @@ class RewardVisualization:
         return super().close(*args, **kwargs)
 
 class InfoFilter:
+    def __init__(self, info_keys=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if info_keys is None:
+            self.info_keys = {
+                'projected_state',
+                'action_taken',
+                'agent',
+            }
+        else:
+            self.info_keys = set(info_keys)
+
     def step(self, action):
         observation, reward, done, full_info = super().step(action)
-        info_keys = [
-            'projected_state',
-            'action_taken',
-            'agent'
-        ]
-        info = {k: full_info[k] for k in info_keys}
+        keys = self.info_keys & set(full_info.keys())
+        if len(keys) != len(self.info_keys):
+            diff = self.info_keys.difference(set(full_info.keys()))
+            for k in diff:
+                logging.warning("intersimple.InfoFilter: info_key {} does not exist in full_info".format(k))
+        info = {k: full_info[k] for k in keys}
+
         return observation, reward, done, info
 
 class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
