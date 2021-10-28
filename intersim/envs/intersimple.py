@@ -14,7 +14,7 @@ import logging
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation."""
 
-    def __init__(self, n_obs=5, *args, **kwargs):
+    def __init__(self, n_obs=5, mu=0., *args, **kwargs):
         super().__init__()
         self._env = gym.make('intersim:intersim-v0', *args, **kwargs)
         self._env._mode = None # TODO: move this to intersim
@@ -22,6 +22,7 @@ class Intersimple(gym.Env):
 
         self._agent = 0
         self._n_obs = n_obs
+        self._mu = mu
         self.action_space = gym.spaces.Box(low=self._env._min_acc, high=self._env._max_acc, shape=(1,))
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 7))
 
@@ -97,7 +98,7 @@ class Intersimple(gym.Env):
 
         if self._env._ind < self._env._svt.simstate.shape[0] - 1:
             next_state = self._env._svt.simstate[self._env._ind + 1]
-            gt_action = self._env.target_state(next_state)
+            gt_action = self._env.target_state(next_state, mu=self._mu)
         else:
             gt_action = torch.ones((self.nv, 1))
 
