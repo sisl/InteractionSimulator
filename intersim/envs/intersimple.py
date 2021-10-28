@@ -106,6 +106,8 @@ class Intersimple(gym.Env):
         if observation['state'][self._agent].isnan().all():
             done = True
 
+        info['agent'] = self._agent
+
         return self._simple_obs(observation, info), reward, bool(done), info
     
     def render(self, mode='post'):
@@ -536,6 +538,15 @@ class RewardVisualization:
         )
         return super().close(*args, **kwargs)
 
+class InfoFilter:
+    def step(self, action):
+        observation, reward, done, full_info = super().step(action)
+        info_keys = [
+            'projected_state',
+            'agent'
+        ]
+        info = {k: full_info[k] for k in info_keys}
+        return observation, reward, done, info
 
 class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
     """Like `Intersimple`, with `imitation` compatibility layer and additional visualizations in animation."""
@@ -599,4 +610,7 @@ class NRasterizedRouteRandomAgent(RandomAgent, RewardVisualization, Reward, Imag
 
 class NRasterizedRouteRandomAgentLocation(RandomLocation, RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
                             NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    pass
+
+class NRasterizedInfo(InfoFilter, NRasterized):
     pass
