@@ -208,6 +208,25 @@ class InteractionSimulator(gym.Env):
         # remap psi to [-pi, pi)
         projstate[...,3] = to_circle(projstate[...,3])
         return projstate
+    
+    def _project_multiple_states(self, state):
+        """
+        Project a sequence of states [s, v] to [x,y,v,psi,psidot]
+        Args:
+            state (torch.Tensor): (T, nv, 2) raw states
+        Returns:
+            projstate (torch.tensor): (T, nv, 5) projected states
+        """
+        svt = self._svt
+        projstate = ssdot_to_simstates(
+            state[:, :,0], state[:, :,1],
+            svt.xpoly, svt.dxpoly, svt.ddxpoly,
+            svt.ypoly, svt.dypoly, svt.ddypoly
+        )
+
+        # remap psi to [-pi, pi)
+        projstate[...,3] = to_circle(projstate[...,3])
+        return projstate
 
     @property
     def relative_state(self):
@@ -341,7 +360,35 @@ class InteractionSimulator(gym.Env):
         next_state[exceeded] = np.nan
 
         return next_state, action, exceeded
-    
+
+    def _next_state_batch(self, state, action):
+        """
+        Propagate the state forward a single step
+        Args:
+            state (torch.Tensor): (..., nv, 2) environment state (s, sdot)
+            action (torch.Tensor): (..., nv, 1) action (acceleration)
+        Returns:
+            next_state (torch.Tensor): (..., nv, 2) next environment state
+            action (torch.Tensor): (..., nv, 1) true action taken (acceleration)
+            exceeded (torch.Tensor): (..., nv,) bool tensor of cars which exceeded their track
+        """
+        if not self.action_space.contains(action):
+            logging.info('Time: {}. Requested action outside of bounds, being clamped'.format(self.t))
+
+        action = action.clamp(self._min_acc, self._max_acc)
+
+        # euler step the state
+        nextv = state[...,1:2] + action * self._dt
+        nextv = nextv.clamp(0., np.inf) # not differentiable!
+        next_state = torch.zeros_like(state)
+        next_state[...,0:1] = state[...,0:1] + 0.5*self._dt*(nextv + state[...,1:2])
+        next_state[...,1:2] = nextv
+
+        # see which states exceeded their maxes
+        exceeded = (next_state[...,0] > self._svt.smax)
+        next_state[exceeded] = np.nan
+
+        return next_state, action, exceeded
     
     def step(self, action):
         """
@@ -438,7 +485,40 @@ class InteractionSimulator(gym.Env):
             states.append(x)
         
         return states
-            
+    
+    def propagate_action_profile_vectorized(self, actions):
+        """
+        Take an joint action profile and propagate the current environment appropriately
+        Args:
+            actions (torch.Tensor): (B, T, nv, adims) T-length action profiles
+        Returns:
+            states (torch.Tensor): (B, T, nv, sdims) resulting projected states
+        """
+        B, T, nv, adims = actions.shape
+        _, arcsdims = self._state.shape
+
+        states = self._state.repeat(B, T+1, 1, 1)
+        assert states.shape == (B, T+1, nv, arcsdims)
+        
+        states = states.transpose(0, 1)
+        actions = actions.transpose(0, 1)
+        assert states.shape == (T+1, B, nv, arcsdims)
+        assert actions.shape == (T, B, nv, adims)
+
+        for iT in range(T):
+            # propagate one step
+            s, _, _ =  self._next_state_batch(states[iT], actions[iT])
+            states[iT + 1] = s
+
+        states = states.transpose(0, 1)
+        states = states[:, 1:, :, :]
+        assert states.shape == (B, T, nv, arcsdims)
+
+        states = self._project_multiple_states(states.reshape(-1, nv, arcsdims))
+        states = states.reshape(B, T, nv, 5)
+
+        return states
+
     def target_state(self, ssdot, mu=0.):
         """
         Take an action to target a particular next state
