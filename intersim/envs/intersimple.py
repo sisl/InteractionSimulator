@@ -628,3 +628,6 @@ class NRasterizedRouteRandomAgentLocation(RandomLocation, RandomAgent, RewardVis
 
 class NRasterizedInfo(InfoFilter, NRasterized):
     pass
+
+class NRasterizedRandomAgentInfo(InfoFilter, NRasterizedRandomAgent):
+    pass
