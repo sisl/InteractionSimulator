@@ -73,3 +73,10 @@ def test_locations():
         print(f'loc {loc} track {track}')
         env = gym.make('intersim:intersim-v0', loc=loc, track=track)
         env.reset()
+
+def test_propagate_action_profile_vectorized():
+    env = gym.make('intersim:intersim-v0')
+    actions = 10 * torch.rand((20, 50, 151, 1))
+    p1 = torch.stack(env.propagate_action_profile(actions))
+    p2 = env.propagate_action_profile_vectorized(actions)
+    assert torch.allclose(p1, p2, equal_nan=True)
