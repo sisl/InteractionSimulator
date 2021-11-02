@@ -14,7 +14,7 @@ import logging
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation."""
 
-    def __init__(self, n_obs=5, mu=0., *args, **kwargs):
+    def __init__(self, n_obs=5, mu=0., random_skip=False, *args, **kwargs):
         super().__init__()
         self._env = gym.make('intersim:intersim-v0', *args, **kwargs)
         self._env._mode = None # TODO: move this to intersim
@@ -23,6 +23,7 @@ class Intersimple(gym.Env):
         self._agent = 0
         self._n_obs = n_obs
         self._mu = mu
+        self._random_skip = random_skip
         self.action_space = gym.spaces.Box(low=self._env._min_acc, high=self._env._max_acc, shape=(1,))
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 7))
 
@@ -31,7 +32,7 @@ class Intersimple(gym.Env):
     def _reset_skip(self):
         agent_alive = (~self._env._svt.simstate[:, self._agent, :].isnan()).any(1).nonzero().squeeze()
         assert len(agent_alive), f'Start of trajectory of agent {self._agent} not found.'
-        start_idx = agent_alive[0].item()
+        start_idx = agent_alive[0].item() if not self._random_skip else random.randint(agent_alive[0].item(), agent_alive[-1].item())
         
         logging.info(f'Skipping to frame {start_idx}.')
         state = self._env._svt.simstate[start_idx].clone()
