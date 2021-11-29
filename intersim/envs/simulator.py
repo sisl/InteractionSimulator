@@ -444,6 +444,7 @@ class InteractionSimulator(gym.Env):
             'prev_state': prev_state,
             'action_taken': action.clone()
         })
+        self._last_action = action.clone()
 
         # generate observation
         ob = self._get_observation(projstate)
@@ -600,6 +601,8 @@ class InteractionSimulator(gym.Env):
         # rendering fields
         self._state_list = []
         self._graph_list = []
+        self._action_list = []
+        self._last_action = None # for saving joint actions
         logging.info('Environment Reset')
 
         # generate info
@@ -631,6 +634,8 @@ class InteractionSimulator(gym.Env):
         if mode in ['file', 'post']:
             self._state_list.append(self.projected_state)
             self._graph_list.append(self._graph.edges)
+            if self._last_action is not None:
+                self._action_list.append(self._last_action)
 
     def close(self, **kwargs):
         """
@@ -645,7 +650,9 @@ class InteractionSimulator(gym.Env):
         if self._mode in ['file', 'post']:
             filestr = kwargs.get('filestr', 'render')
             stacked_states = torch.stack(self._state_list)
+            stacked_actions = torch.stack(self._action_list)
             torch.save(stacked_states, filestr+'_states.pt')
+            torch.save(stacked_actions, filestr+'_actions.pt')
             pickle.dump(self._graph_list,open(filestr+'_graphs.pkl', 'wb'))
             torch.save(self._lengths, filestr+'_lengths.pt')
             torch.save(self._widths, filestr+'_widths.pt')
