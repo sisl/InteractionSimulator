@@ -20,6 +20,7 @@ def test_reset_obs_shape():
 
 def test_render():
     env = Intersimple()
+    env.reset()
     env.render()
 
 def test_close():
