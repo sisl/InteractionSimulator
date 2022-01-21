@@ -26,8 +26,8 @@ class Intersimple(gym.Env):
         self._random_skip = random_skip
         self.action_space = gym.spaces.Box(low=self._env._min_acc, high=self._env._max_acc, shape=(1,))
 
-        n_states = self._env.relative_state.shape[-1]
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 1 + n_states))
+        self.n_relstates = self._env.relative_state.shape[-1]
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 1 + self.n_relstates))
 
         self._reset = False
 
@@ -205,9 +205,8 @@ class LidarRelativeObservation:
 
     def __init__(self, n_rays=16, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        n_states = self._env.relative_state.shape[-1]
         self.n_rays = n_rays
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + n_rays, n_states))
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + n_rays, self.n_relstates))
 
     def _bucket_closest(self, relative_states, buckets):
         distances = (relative_states[:, :2]**2).sum(-1)
@@ -218,7 +217,7 @@ class LidarRelativeObservation:
         relative_states = intersim_obs['relative_state'][self._agent]
 
         # dummy observation of unintersected rays
-        dummy = np.inf * np.ones((1, self.observation_space.shape[-1]))
+        dummy = np.inf * np.ones((1, self.n_relstates))
         assert (dummy[..., :2]**2).sum() == np.inf
 
         # filter observations
@@ -248,10 +247,10 @@ class LidarRelativeObservation:
         return lidar
 
     def _simple_obs(self, intersim_obs, intersim_info):
-        ego_state = intersim_obs['state'][self._agent]
-        ego_state = np.pad(ego_state, (0, self.observation_space.shape[-1] - ego_state.shape[-1]))
-        ego_state = np.expand_dims(ego_state, 0)
         lidar = self._lidar_obs(intersim_obs)
+        ego_state = intersim_obs['state'][self._agent]
+        ego_state = np.pad(ego_state, (0, lidar.shape[-1] - ego_state.shape[-1]))
+        ego_state = np.expand_dims(ego_state, 0)
         return np.concatenate((ego_state, lidar))
 
 
@@ -663,7 +662,6 @@ class IntersimpleMarker(ObservationVisualization, ActionVisualization, Interacti
     pass
 
 class IntersimpleLidar(LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, LidarObservation, Intersimple):
-    """Like `Intersimple`, with `imitation` compatibility layer and additional visualizations in animation."""
     pass
 
 class IntersimpleNormalizedActions(NormalizedActionSpace, IntersimpleMarker):
@@ -684,6 +682,11 @@ class IntersimpleFlatRandomAgent(RandomAgent, IntersimpleFlat):
 
 class IntersimpleReward(RewardVisualization, Reward, IntersimpleFlatAgent):
     """`IntersimpleFlatAgent` with rewards."""
+    pass
+
+class IntersimpleLidarFlat(RewardVisualization, Reward, FixedAgent, FlatObservation, NormalizedActionSpace,
+                           LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz,
+                           ImitationCompat, LidarObservation, Intersimple):
     pass
 
 class IntersimpleTargetSpeed(RewardVisualization, TargetSpeedReward, IntersimpleFlatAgent):
