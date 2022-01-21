@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import logging
 import random
-from intersim.viz import make_action_viz, make_marker_viz, make_observation_viz, make_reward_viz, Rasta
+from intersim.viz import make_action_viz, make_marker_viz, make_observation_viz, make_lidar_observation_viz, make_reward_viz, Rasta
 import functools
 import matplotlib.pyplot as plt
 from celluloid import Camera
@@ -25,7 +25,9 @@ class Intersimple(gym.Env):
         self._mu = mu
         self._random_skip = random_skip
         self.action_space = gym.spaces.Box(low=self._env._min_acc, high=self._env._max_acc, shape=(1,))
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 7))
+
+        n_states = self._env.relative_state.shape[-1]
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 1 + n_states))
 
         self._reset = False
 
@@ -188,7 +190,8 @@ class FlatObservation:
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=((1 + self._n_obs) * 7,))
+        obs_shape = np.prod(self.observation_space.shape)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_shape,))
 
     def reset(self):
         return super().reset().reshape((-1,))
@@ -196,6 +199,74 @@ class FlatObservation:
     def step(self, action):
         observation, reward, done, info = super().step(action)
         return observation.reshape((-1,)), reward, done, info
+
+
+class LidarRelativeObservation:
+
+    def __init__(self, n_rays=16, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        n_states = self._env.relative_state.shape[-1]
+        self.n_rays = n_rays
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + n_rays, n_states))
+
+    def _bucket_closest(self, relative_states, buckets):
+        distances = (relative_states[:, :2]**2).sum(-1)
+        ray_hits = [np.argmin(distances[buckets == b]) for b in buckets]
+        return relative_states[ray_hits]
+
+    def _lidar_obs(self, intersim_obs):
+        relative_states = intersim_obs['relative_state'][self._agent]
+
+        # dummy observation of unintersected rays
+        dummy = np.inf * np.ones((1, self.observation_space.shape[-1]))
+        assert (dummy[..., :2]**2).sum() == np.inf
+
+        # filter observations
+        valid = ~np.isnan(relative_states.numpy()).any(-1)
+        relative_states = relative_states[valid]
+        relative_states = np.concatenate((dummy, relative_states))
+
+        # transform relative positions to ego vehicle frame
+        psi = intersim_obs['state'][self._agent, 3]
+        ego_fwd = np.stack((np.cos(psi), np.sin(psi)), axis=-1)
+        ego_left = np.stack((-np.sin(psi), np.cos(psi)), axis=-1)
+        ego_tf = np.stack((ego_fwd, ego_left), axis=-2)
+        relative_states[..., 1:, :2] = np.matmul(relative_states[..., 1:, :2], ego_tf.T)
+        
+        # bucket angles
+        angles = np.arctan2(relative_states[..., 1], relative_states[..., 0])
+        bucket_assignments = np.digitize(angles, bins=np.linspace(-np.pi, np.pi, num=self.n_rays))
+        bucket_matrix = np.expand_dims(bucket_assignments, -2) == np.expand_dims(np.arange(self.n_rays), -1)
+        bucket_matrix[..., 0] = True # assign dummy elemement to all buckets
+
+        # take closest vehicle in each bucket
+        distances = (relative_states[..., :2]**2).sum(-1)
+        bucket_distances = np.where(bucket_matrix, np.expand_dims(distances, -2), np.inf)
+        ray_hit_idx = np.argmin(bucket_distances, axis=-1)
+
+        lidar = relative_states[ray_hit_idx]        
+        return lidar
+
+    def _simple_obs(self, intersim_obs, intersim_info):
+        ego_state = intersim_obs['state'][self._agent]
+        ego_state = np.pad(ego_state, (0, self.observation_space.shape[-1] - ego_state.shape[-1]))
+        ego_state = np.expand_dims(ego_state, 0)
+        lidar = self._lidar_obs(intersim_obs)
+        return np.concatenate((ego_state, lidar))
+
+
+class LidarObservation(LidarRelativeObservation):
+
+    def _lidar_obs(self, intersim_obs):
+        lidar = super()._lidar_obs(intersim_obs)
+
+        # transform relative positions to polar coordinates
+        distances = np.linalg.norm(lidar[..., :2], axis=-1)
+        angles = np.arctan2(lidar[..., 1], lidar[..., 0])
+        lidar[..., 0] = distances
+        lidar[..., 1] = angles
+        
+        return lidar
 
 
 class RasterizedObservation:
@@ -500,6 +571,29 @@ class ObservationVisualization:
         )
         return super().close(*args, **kwargs)
 
+
+class LidarObservationVisualization:
+
+    def reset(self):
+        observation = super().reset()
+        self._observations = [observation]
+        return observation
+
+    def step(self, action):
+        observation, reward, done, info = super().step(action)
+        self._observations.append(observation)
+        return observation, reward, done, info
+    
+    def close(self, *args, **kwargs):
+        import intersim.viz.animatedviz
+        from intersim.viz.animatedviz import AnimatedViz
+        intersim.viz.animatedviz.AnimatedViz = make_lidar_observation_viz(
+            PredecessorViz=AnimatedViz,
+            observations=self._observations,
+        )
+        return super().close(*args, **kwargs)
+
+
 class ActionVisualization:
 
     def reset(self):
@@ -565,6 +659,10 @@ class InfoFilter:
         return observation, reward, done, info
 
 class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+    """Like `Intersimple`, with `imitation` compatibility layer and additional visualizations in animation."""
+    pass
+
+class IntersimpleLidar(LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, LidarObservation, Intersimple):
     """Like `Intersimple`, with `imitation` compatibility layer and additional visualizations in animation."""
     pass
 
