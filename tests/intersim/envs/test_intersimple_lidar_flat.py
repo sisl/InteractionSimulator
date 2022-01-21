@@ -21,8 +21,8 @@ def test_ego_state():
     assert obs[5] == 0
 
 def test_viz(tmp_path):
-    env = IntersimpleLidarFlat(n_rays=128)
-    obs = env.reset()
+    env = IntersimpleLidarFlat(n_rays=16, agent=21)
+    env.reset()
     env.render()
 
     done = False
