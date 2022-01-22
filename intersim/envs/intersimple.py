@@ -566,7 +566,9 @@ class InteractionSimulatorMarkerViz:
             PredecessorViz=AnimatedViz,
             agent=self._agent
         )
-        return super().close(*args, **kwargs)
+        out = super().close(*args, **kwargs)
+        intersim.viz.animatedviz.AnimatedViz = AnimatedViz
+        return out
 
 
 class ObservationVisualization:
@@ -588,7 +590,9 @@ class ObservationVisualization:
             PredecessorViz=AnimatedViz,
             observations=self._observations,
         )
-        return super().close(*args, **kwargs)
+        out = super().close(*args, **kwargs)
+        intersim.viz.animatedviz.AnimatedViz = AnimatedViz
+        return out
 
 
 class LidarObservationVisualization:
@@ -610,7 +614,9 @@ class LidarObservationVisualization:
             PredecessorViz=AnimatedViz,
             observations=self._observations,
         )
-        return super().close(*args, **kwargs)
+        out = super().close(*args, **kwargs)
+        intersim.viz.animatedviz.AnimatedViz = AnimatedViz
+        return out
 
 
 class ActionVisualization:
@@ -631,7 +637,9 @@ class ActionVisualization:
             PredecessorViz=AnimatedViz,
             actions=self._actions
         )
-        return super().close(*args, **kwargs)
+        out = super().close(*args, **kwargs)
+        intersim.viz.animatedviz.AnimatedViz = AnimatedViz
+        return out
 
 
 class RewardVisualization:
@@ -652,7 +660,9 @@ class RewardVisualization:
             PredecessorViz=AnimatedViz,
             rewards=self._rewards
         )
-        return super().close(*args, **kwargs)
+        out = super().close(*args, **kwargs)
+        intersim.viz.animatedviz.AnimatedViz = AnimatedViz
+        return out
 
 class InfoFilter:
     def __init__(self, info_keys=None, *args, **kwargs):
