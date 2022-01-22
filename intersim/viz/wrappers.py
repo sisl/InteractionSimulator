@@ -50,6 +50,8 @@ def make_lidar_observation_viz(PredecessorViz: AnimatedViz, observations, width=
         
         @staticmethod
         def _draw(observation):
+            observation = observation.copy()
+
             distances = observation[..., 1:, 0]
             angles = observation[..., 1:, 1]
             #angles = np.linspace(-np.pi, np.pi, observation.shape[-2] - 1)
@@ -66,7 +68,7 @@ def make_lidar_observation_viz(PredecessorViz: AnimatedViz, observations, width=
 
             x = observation[0, 0]
             y = observation[0, 1]
-            color = lambda i: (np.sin(i)**2, np.sin(i+1)**2, np.sin(i+2)**2)
+            color = lambda i: (np.sin(i)**2, np.sin(1.3*i+1)**2, np.sin(1.7*i+2)**2)
 
             arrows = [matplotlib.patches.Arrow(x, y, dx, dy, width, color=color(i)) for i, (dx, dy) in enumerate(observation[1:, :2])]
             return arrows
