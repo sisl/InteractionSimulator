@@ -234,7 +234,8 @@ class LidarRelativeObservation:
         
         # bucket angles
         angles = np.arctan2(relative_states[..., 1], relative_states[..., 0])
-        bucket_assignments = np.digitize(angles, bins=np.linspace(-np.pi, np.pi, num=self.n_rays))
+        bin_boundaries = np.linspace(-np.pi, np.pi, num=self.n_rays+1)
+        bucket_assignments = np.digitize(angles, bins=bin_boundaries[1:-1])
         bucket_matrix = np.expand_dims(bucket_assignments, -2) == np.expand_dims(np.arange(self.n_rays), -1)
         bucket_matrix[..., 0] = True # assign dummy elemement to all buckets
 
@@ -277,7 +278,8 @@ class LidarObservation(LidarRelativeObservation):
         obs[..., 1:, 2:4] = np.matmul(obs[..., 1:, 2:4], ego_tf.T)
 
         # clip lidar range
-        angles = np.linspace(-np.pi, np.pi, obs.shape[-2] - 1)
+        angles = np.linspace(-np.pi, np.pi, obs.shape[-2]-1+1)
+        angles = (angles[:-1] + angles[1:]) / 2
         beyond_range = obs[..., 1:, 0] > self.lidar_range
         obs[..., 1:, 0][beyond_range] = self.lidar_range
         obs[..., 1:, 1][beyond_range] = angles[beyond_range]
