@@ -269,18 +269,19 @@ class LidarObservation(LidarRelativeObservation):
         angles = np.arctan2(obs[..., 1:, 1], obs[..., 1:, 0])
         obs[..., 1:, 0] = distances
         obs[..., 1:, 1] = angles
+        beyond_range = obs[..., 1:, 0] > self.lidar_range
 
         # transform relative velocities to ego coordinate frame
         psi = obs[..., 0, 3]
         ego_fwd = np.stack((np.cos(psi), np.sin(psi)), axis=-1)
         ego_left = np.stack((-np.sin(psi), np.cos(psi)), axis=-1)
         ego_tf = np.stack((ego_fwd, ego_left), axis=-2)
+        obs[..., 1:, 2:4][beyond_range] = 0
         obs[..., 1:, 2:4] = np.matmul(obs[..., 1:, 2:4], ego_tf.T)
 
         # clip lidar range
         angles = np.linspace(-np.pi, np.pi, obs.shape[-2]-1+1)
         angles = (angles[:-1] + angles[1:]) / 2
-        beyond_range = obs[..., 1:, 0] > self.lidar_range
         obs[..., 1:, 0][beyond_range] = self.lidar_range
         obs[..., 1:, 1][beyond_range] = angles[beyond_range]
         obs[..., 1:, 2:][beyond_range, :] = 0
