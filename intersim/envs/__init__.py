@@ -6,4 +6,4 @@ from intersim.envs.intersimple import IntersimpleFlat, IntersimpleFlatAgent, Int
 from intersim.envs.intersimple import IntersimpleReward, IntersimpleTargetSpeed, IntersimpleTargetSpeedAgent, IntersimpleTargetSpeedRandom
 from intersim.envs.intersimple import IntersimpleRasterized, NRasterized, NRasterizedRandomAgent, NRasterizedRoute, NRasterizedIncrementingAgent, \
                                       NRasterizedRouteRandomAgent, NRasterizedRouteIncrementingAgent, NRasterizedRouteRandomAgentLocation, \
-                                      IntersimpleLidar, IntersimpleLidarFlat, IntersimpleLidarFlatRandom
+                                      IntersimpleLidar, IntersimpleLidarFlat, IntersimpleLidarFlatRandom, IntersimpleLidarFlatIncrementingAgent

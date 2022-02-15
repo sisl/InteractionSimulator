@@ -725,6 +725,11 @@ class IntersimpleLidarFlatRandom(RewardVisualization, Reward, RandomAgent, FlatO
                            ImitationCompat, LidarObservation, Intersimple):
     pass
 
+class IntersimpleLidarFlatIncrementingAgent(RewardVisualization, Reward, IncrementingAgent, FlatObservation, NormalizedActionSpace,
+                           LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz,
+                           ImitationCompat, LidarObservation, Intersimple):
+    pass
+
 class IntersimpleTargetSpeed(RewardVisualization, TargetSpeedReward, IntersimpleFlatAgent):
     """Like `IntersimpleFlatAgent`, with speed deviation and collision penalty."""
     pass
