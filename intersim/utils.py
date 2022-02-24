@@ -69,6 +69,25 @@ def powerseries(x, deg):
 
     return torch.stack([x**i for i in range(deg+1)],dim=-1)
 
+def horner_scheme(x, poly):
+    """
+    Use Horner scheme to evaluate polynomial
+
+    Args:
+        x (torch.tensor): (nv, nsteps) path coordinates where to evaluate polynomial
+        poly (torch.tensor): (nv, deg) polynomial coefficients for all vehicles
+
+    Returns:
+        r (torch.tensor): (nv, nsteps) polynomial evaluated for all vehicles at all path coordinates
+    """
+    deg = poly.shape[-1]
+    nsteps = x.shape[-1]
+    r = poly[:, -1:].type(x.dtype).repeat(1, nsteps)
+    for i in range(2, deg+1):
+        r *= x
+        r += poly[:, -i:1-i]
+    return r
+
 def df_to_stackedvehicletraj(df, deg=20):
     """
     Convert a vehicle_tracks dataframe to a StackedVehicleTraj

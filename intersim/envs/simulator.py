@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import pickle
 
-from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt, powerseries
+from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt, powerseries, horner_scheme
 from intersim import Box, StackedVehicleTraj, InteractionGraph
 from intersim.viz import animate, build_map
 from intersim.collisions import check_collisions, check_collisions_trajectory
@@ -280,25 +280,27 @@ class InteractionSimulator(gym.Env):
         else:
             v = self._state[:,1:2]
             ds = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
-        
-        s = ds + self._state[:,0:1]
-        nni = (s <= self.smax.unsqueeze(1))
+
+        s = (ds + self._state[:,0:1]).type(torch.float64)
+        smax = self.smax.type(torch.float64).unsqueeze(1)
+        nni = (s <= smax)
         # s[~nni] = np.nan
 
         deg = self._xpoly.shape[-1] - 1
         expand_sims = powerseries(s.type(torch.float64), deg) # (nv, n, deg+1)
-        y = (self._ypoly.unsqueeze(1) * expand_sims).sum(dim=-1)
-        x = (self._xpoly.unsqueeze(1) * expand_sims).sum(dim=-1)
+        _y = (self._ypoly.unsqueeze(1) * expand_sims).sum(dim=-1)
+        _x = (self._xpoly.unsqueeze(1) * expand_sims).sum(dim=-1)
 
-        expand_smax = powerseries(self.smax.type(torch.float64), deg)
-        x_max = (self._xpoly * expand_smax).sum(dim=-1)
-        y_max = (self._ypoly * expand_smax).sum(dim=-1)
+        x = horner_scheme(s, self._xpoly)
+        y = horner_scheme(s, self._ypoly)
 
-        s = ds + self._state[:,0:1]
-        dx = (self._svt._dxpoly * expand_smax).sum(dim=-1)
-        dy = (self._svt._dypoly * expand_smax).sum(dim=-1)
-        x_line = x_max.unsqueeze(1) + (s - self.smax.unsqueeze(1)) * dx.unsqueeze(1)
-        y_line = y_max.unsqueeze(1) + (s - self.smax.unsqueeze(1)) * dy.unsqueeze(1)
+        x_max = horner_scheme(smax, self._xpoly)
+        y_max = horner_scheme(smax, self._ypoly)
+
+        dx = horner_scheme(smax, self._svt._dxpoly)
+        dy = horner_scheme(smax, self._svt._dypoly)
+        x_line = x_max + (s - smax) * dx
+        y_line = y_max + (s - smax) * dy
 
         x[~nni] = x_line[~nni]
         y[~nni] = y_line[~nni]
