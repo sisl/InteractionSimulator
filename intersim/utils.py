@@ -66,8 +66,12 @@ def to_circle(x):
         return y
 
 def powerseries(x, deg):
-
-    return torch.stack([x**i for i in range(deg+1)],dim=-1)
+    if False: # method is slower for some reason
+        z = torch.ones([*x.shape,deg+1], dtype=x.dtype)
+        for i in range(1,deg+1):
+            z[...,i] = x*z[...,i-1]
+    z = torch.stack([x**i for i in range(deg+1)],dim=-1)
+    return z
 
 def horner_scheme(x, poly):
     """
@@ -191,23 +195,28 @@ def ssdot_to_simstates(s, sdot,
     nv = xpoly.shape[0]
     deg = xpoly.shape[-1] - 1
     T = s.shape[0]
-
-    simstates = torch.ones(T, nv, 5) * np.nan
+    
     expand_sims = powerseries(s.type(torch.float64), deg)
-
     x = (xpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
     dxds = (dxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
     ddxds = (ddxpoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
     y = (ypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
     dyds = (dypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
     ddyds = (ddypoly.unsqueeze(0)*expand_sims).sum(dim=-1).type(torch.get_default_dtype())
-
+    if False: # slower for some reason
+        x = horner_scheme(s.T, xpoly).T
+        dxds = horner_scheme(s.T, dxpoly).T
+        ddxds = horner_scheme(s.T, ddxpoly).T
+        y = horner_scheme(s.T, ypoly).T
+        dyds = horner_scheme(s.T, dypoly).T
+        ddyds = horner_scheme(s.T, ddypoly).T
+    
     psi = torch.atan2(dyds,dxds)
 
     den = dyds ** 2 + dxds ** 2
     psidot = (1./den) * (-dxds * ddyds + dyds * ddxds)
 
-
+    simstates = torch.ones(T, nv, 5)
     simstates[...,0] = x
     simstates[...,1] = y
     simstates[...,2] = sdot

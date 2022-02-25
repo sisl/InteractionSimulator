@@ -284,12 +284,6 @@ class InteractionSimulator(gym.Env):
         s = (ds + self._state[:,0:1]).type(torch.float64)
         smax = self.smax.type(torch.float64).unsqueeze(1)
         nni = (s <= smax)
-        # s[~nni] = np.nan
-
-        deg = self._xpoly.shape[-1] - 1
-        expand_sims = powerseries(s.type(torch.float64), deg) # (nv, n, deg+1)
-        _y = (self._ypoly.unsqueeze(1) * expand_sims).sum(dim=-1)
-        _x = (self._xpoly.unsqueeze(1) * expand_sims).sum(dim=-1)
 
         x = horner_scheme(s, self._xpoly)
         y = horner_scheme(s, self._ypoly)
