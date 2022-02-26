@@ -51,6 +51,7 @@ class InteractionSimulator(gym.Env):
                  graph: InteractionGraph = InteractionGraph(),
                  min_acc: float=-10.0, max_acc: float=10.0,
                  stop_on_collision: bool=False,
+                 check_collisions: bool=False,
                  reward_method='none', observe_method='full',
                  custom_reward: Callable[[dict, torch.Tensor], float] = lambda x, y: 0.,
                  shuffle_tracks: bool = False, shuffle_tracks_seed: int = 0,
@@ -104,6 +105,7 @@ class InteractionSimulator(gym.Env):
         self._ind = 0
         self._exceeded = torch.tensor([False] * self._nv)
         self._stop_on_collision = stop_on_collision
+        self._check_collisions = check_collisions
         self._min_acc = min_acc
         self._max_acc = max_acc
         self._map_path = map_path
@@ -421,11 +423,12 @@ class InteractionSimulator(gym.Env):
         projstate = self.projected_state
 
         self.info.update({'collision': False})
-        # if terminating on collision, check for collisions
-        if self._stop_on_collision:
-            if check_collisions(projstate, self._lengths, self._widths):
-                self.done = True 
-                self.info.update({'collision': True})
+        # check for collisions if necessary, terminate if stopping on collisions
+        if self._stop_on_collision or self._check_collisions:
+            collision = check_collisions(projstate, self._lengths, self._widths)
+            self.info.update({'collision': collision})
+            if collision and self._stop_on_collision:
+                self.done = True
 
         # update interaction graph
         self._graph.update_graph(projstate)
