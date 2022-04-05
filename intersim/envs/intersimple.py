@@ -11,27 +11,59 @@ from celluloid import Camera
 from intersim.utils import LOCATIONS, MAX_TRACKS
 import logging
 
+### Different reward functions
+def constant_reward(state, action, info, reward=1., collision_penalty=0.):
+    return reward - collision_penalty * info['collision']
+
+def target_speed_reward(state, action, info, target_speed=10., speed_penalty_weight=0.01, collision_penalty=1000.):
+    speed = state[2].item()
+    collision = info['collision']
+    return -speed_penalty_weight * (speed - target_speed)**2 - collision_penalty * collision
+
+def speed_reward(state, action, info, speed_weight=0.01, collision_penalty=1000.):
+    speed = state[2].item()
+    collision = info['collision']
+    return speed_weight * speed - collision_penalty * collision
+
+### Mixin class components
 class Intersimple(gym.Env):
-    """Single-agent intersim environment with block observation."""
+    """Single-agent intersim environment with block observation, other vehicles controlled by expert actions."""
 
-    def __init__(self, n_obs=5, mu=0., random_skip=False, *args, **kwargs):
+    def __init__(self, n_obs:int=5, mu:float=0., random_skip:bool=False, *args, **kwargs):
+        """
+        Initialize base intersimple environment.
+
+        Args:
+            n_obs (int): number of layers in the observation skip
+            mu (float): regularizer to smooth the expert acceleration calculation
+            random_skip (bool): whether to choose start frames randomly on reset
+
+        """
         super().__init__()
-        self._env = gym.make('intersim:intersim-v0', *args, **kwargs)
+        self._env = gym.make('intersim:intersim-v0', *args, **kwargs) # parent intersim environment
         self._env._mode = None # TODO: move this to intersim
-        self.nv = self._env._nv
+        self.nv = self._env._nv # number of vehicles in parent environment
+        self._agent = 0 # agent index which is currently being controlled
 
-        self._agent = 0
-        self._n_obs = n_obs
-        self._mu = mu
-        self._random_skip = random_skip
+        self._mu = mu # regularizing coefficient for expert acceleration smoothing
+        self._random_skip = random_skip # whether to choose start frames randomly on environment reset
+
         self.action_space = gym.spaces.Box(low=self._env._min_acc, high=self._env._max_acc, shape=(1,))
-
         self.n_relstates = self._env.relative_state.shape[-1]
+        self._n_obs = n_obs
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 1 + self.n_relstates))
 
-        self._reset = False
+        self._reset = False # environment has not been reset
 
     def _reset_skip(self):
+        """
+        Reset the environment, while potentially skipping frames if random_skip was true
+
+        Returns:
+            obs: intersim observation
+            info: intersim info 
+        """
+
         agent_alive = (~self._env._svt.simstate[:, self._agent, :].isnan()).any(1).nonzero().squeeze()
         assert len(agent_alive), f'Start of trajectory of agent {self._agent} not found.'
         start_idx = agent_alive[0].item() if not self._random_skip else random.randint(agent_alive[0].item(), agent_alive[-1].item())
@@ -56,11 +88,27 @@ class Intersimple(gym.Env):
         return obs, info
 
     def reset(self):
+        """
+        Reset the intersim environment and return the observation
+
+        Returns:
+            obs (np.ndarray): the observation for the controlled agent, as returned by _simple_obs
+        """
         self._reset = True
         obs, info = self._reset_skip()
         return self._simple_obs(obs, info)
 
     def _simple_obs(self, intersim_obs, intersim_info):
+        """
+        Generate intersimple observation from intersim observation and info.
+
+        Args:
+            intersim_obs: the obs returned from the parent intersim env step
+            intersim_info: the info returned from the parent intersim env step
+
+        Returns:
+            obs (np.ndarray): (n_obs+1, n_relstate+1) the observation for the controlled agent
+        """
         ego_state = intersim_obs['state'][self._agent]
         ego_valid = not ego_state.isnan().all()
         if ego_valid and ego_state.isnan().any():
@@ -87,13 +135,24 @@ class Intersimple(gym.Env):
         return obs
 
     def step(self, action):
-        """Observation format
+        """
+        Take an intersim step
+
+        Args:
+            action (float): the acceleration action for the controlled agent to take
+        Returns:
+            obs (np.ndarray): the observation for the controlled agent, as returned by _simple_obs
+            reward (float): the immediate reward from the step
+            done (bool): whether to the episode is finished
+            info: environment information
+        
+        Default observation format is a matrix of shape (n_obs+1, n_rel_state):
         ```
         ┌──────────────────────┬───────┐
-        │ ego state            │ valid │
-        │ relative state 1     │ valid │
+        │ ego state,      0    │ valid │
+        │ relative_state_1     │ valid │
         │              ...             │
-        │ relative state n_obs │ valid │
+        │ relative_state_n_obs │ valid │
         └──────────────────────┴───────┘
         ```
         """
@@ -116,11 +175,16 @@ class Intersimple(gym.Env):
         return self._simple_obs(observation, info), reward, bool(done), info
     
     def render(self, mode='post'):
+        """
+        Overwrite render to call the parent environment render
+        """
         return self._env.render(mode)
 
     def close(self, *args, **kwargs):
+        """
+        Overwrite close to call the parent environment close
+        """
         return self._env.close(*args, **kwargs)
-
 
 class ImitationCompat:
     """Make environment compatible with `imitation` library, especially `RolloutInfoWrapper`."""
@@ -134,23 +198,6 @@ class ImitationCompat:
     def step(self, action):
         obs, reward, done, info = super().step(action)
         return obs, reward, done, info.copy()
-
-
-def constant_reward(state, action, info, reward=1., collision_penalty=0.):
-    return reward - collision_penalty * info['collision']
-
-
-def target_speed_reward(state, action, info, target_speed=10., speed_penalty_weight=0.01, collision_penalty=1000.):
-    speed = state[2].item()
-    collision = info['collision']
-    return -speed_penalty_weight * (speed - target_speed)**2 - collision_penalty * collision
-
-
-def speed_reward(state, action, info, speed_weight=0.01, collision_penalty=1000.):
-    speed = state[2].item()
-    collision = info['collision']
-    return speed_weight * speed - collision_penalty * collision
-
 
 class Reward:
     """Extends custom reward function support and makes `stop_on_collision` default to `True`."""
@@ -170,9 +217,9 @@ class Reward:
         reward = self._reward(state, action, info)
         return obs, reward, done, info
 
-
 class TargetSpeedReward(Reward):
-    
+    """Proved reward through the `target_speed_reward` function."""
+
     def __init__(self, target_speed=10., speed_penalty_weight=0.01, collision_penalty=1000., *args, **kwargs):
         super().__init__(
             reward=functools.partial(
@@ -187,7 +234,7 @@ class TargetSpeedReward(Reward):
 
 
 class FlatObservation:
-    
+    """Return a flattened observation vector."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         obs_shape = np.prod(self.observation_space.shape)
@@ -202,7 +249,10 @@ class FlatObservation:
 
 
 class LidarRelativeObservation:
-
+    """
+    Return observation relative state information based on lidar-like approach:
+    Use relative state of closest vehicles in sectors defined by `n_rays`
+    """
     def __init__(self, n_rays=16, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_rays = n_rays
@@ -256,7 +306,10 @@ class LidarRelativeObservation:
 
 
 class LidarObservation(LidarRelativeObservation):
-
+    """
+    Return observation relative state information based on lidar-like approach, transformed into ego frame:
+    Use relative state of closest vehicles in sectors defined by `n_rays`
+    """
     def __init__(self, lidar_range=50, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lidar_range = lidar_range
@@ -290,6 +343,7 @@ class LidarObservation(LidarRelativeObservation):
 
 
 class RasterizedObservation:
+    """Return rasterized observation in ego frame"""
 
     def __init__(self, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), map_color=255, vehicle_color=255, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -354,7 +408,7 @@ class RasterizedObservation:
 
 
 class RasterizedRoute:
-
+    """Return rasterized observation in ego frame with route added"""
     def __init__(self, route_thickness=2, height=200, width=200, m_per_px=0.5, raster_fixpoint=(0.5, 0.5), *args, **kwargs):
         super().__init__(
             height=height,
@@ -407,7 +461,7 @@ class RasterizedRoute:
 
 
 class NObservations:
-
+    """Return observations which stack multiple past rasterized frames together"""
     def __init__(self, n_frames=5, skip_frames=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
         n_channels, height, width = self.observation_space.shape
@@ -433,7 +487,7 @@ class NObservations:
 
 
 class ImageObservationAnimation:
-
+    """Overwrite rendering to additionally save a video of the rasterized ego-frame observations"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._last_observation = None
@@ -475,7 +529,7 @@ class ImageObservationAnimation:
 
 
 class NormalizedActionSpace:
-    
+    """Normalize the action space so inputs are in (-1,1) and map to acceleration bounds"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,))
@@ -497,21 +551,21 @@ class NormalizedActionSpace:
 
 
 class FixedAgent:
-
+    """Fix the agent upon init and reset to control the same agent."""
     def __init__(self, agent=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._agent = agent
 
 
 class RandomAgent:
-
+    """Reset to control a random agent."""
     def reset(self):
         self._agent = random.randrange(self.nv)
         return super().reset()
 
 
 class IncrementingAgent:
-    
+    """Increment the controlled agent index on every reset."""
     def __init__(self, start_agent=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._agent = (start_agent - 1) %  self.nv # assuming going to call reset after initializing environment
@@ -522,7 +576,7 @@ class IncrementingAgent:
 
 
 class FixedLocation:
-
+    """Fix the location/track on initialization."""
     def __init__(self, loc=0, track=0, *args, **kwargs):
         self._location = loc
         self._track = track
@@ -530,7 +584,7 @@ class FixedLocation:
 
 
 class RandomLocation:
-    
+    """Reset to a random location/track."""
     records = [(l, t) for l in range(len(LOCATIONS)) for t in range(MAX_TRACKS)]
     # see tests.intersim.envs.test_simulator.test_locations
     records.remove((1, 4))
@@ -559,7 +613,7 @@ class RandomLocation:
 
 
 class InteractionSimulatorMarkerViz:
-
+    """Mark controlled agent on the animation display."""
     def close(self, *args, **kwargs):
         import intersim.viz.animatedviz
         from intersim.viz.animatedviz import AnimatedViz
@@ -573,7 +627,7 @@ class InteractionSimulatorMarkerViz:
 
 
 class ObservationVisualization:
-
+    """Update visualization for observations."""
     def reset(self):
         observation = super().reset()
         self._observations = [observation]
@@ -595,9 +649,8 @@ class ObservationVisualization:
         intersim.viz.animatedviz.AnimatedViz = AnimatedViz
         return out
 
-
 class LidarObservationVisualization:
-
+    """Include lidar arrows on the animation display."""
     def reset(self):
         observation = super().reset()
         self._observations = [observation]
@@ -619,9 +672,8 @@ class LidarObservationVisualization:
         intersim.viz.animatedviz.AnimatedViz = AnimatedViz
         return out
 
-
 class ActionVisualization:
-
+    """Include the actions on the animation display."""
     def reset(self):
         self._actions = []
         return super().reset()
@@ -642,9 +694,8 @@ class ActionVisualization:
         intersim.viz.animatedviz.AnimatedViz = AnimatedViz
         return out
 
-
 class RewardVisualization:
-
+    """Include the rewards on the animation display."""
     def reset(self):
         self._rewards = []
         return super().reset()
@@ -666,6 +717,7 @@ class RewardVisualization:
         return out
 
 class InfoFilter:
+    """Filter down info returns by `info_keys` to save time."""
     def __init__(self, info_keys=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if info_keys is None:
@@ -688,31 +740,26 @@ class InfoFilter:
 
         return observation, reward, done, info
 
+### Mixin intersimple environment classes
 class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
-    """Like `Intersimple`, with `imitation` compatibility layer and additional visualizations in animation."""
     pass
 
 class IntersimpleLidar(LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, LidarObservation, Intersimple):
     pass
 
 class IntersimpleNormalizedActions(NormalizedActionSpace, IntersimpleMarker):
-    """Like `IntersimpleMarker`, with symmetric and normalized action space."""
     pass
 
 class IntersimpleFlat(FlatObservation, IntersimpleNormalizedActions):
-    """Like `IntersimpleNormalizedActions`, with flattened observation vector."""
     pass
 
 class IntersimpleFlatAgent(FixedAgent, IntersimpleFlat):
-    """Like `IntersimpleFlat`, but agent can be selected at instantiation."""
     pass
 
 class IntersimpleFlatRandomAgent(RandomAgent, IntersimpleFlat):
-    """Like `IntersimpleFlat`, but controlled agent is chosen randomly at every reset."""
     pass
 
 class IntersimpleReward(RewardVisualization, Reward, IntersimpleFlatAgent):
-    """`IntersimpleFlatAgent` with rewards."""
     pass
 
 class IntersimpleLidarFlat(RewardVisualization, Reward, FixedAgent, FlatObservation, NormalizedActionSpace,
@@ -731,15 +778,12 @@ class IntersimpleLidarFlatIncrementingAgent(RewardVisualization, Reward, Increme
     pass
 
 class IntersimpleTargetSpeed(RewardVisualization, TargetSpeedReward, IntersimpleFlatAgent):
-    """Like `IntersimpleFlatAgent`, with speed deviation and collision penalty."""
     pass
 
 class IntersimpleTargetSpeedAgent(RewardVisualization, TargetSpeedReward, IntersimpleFlatAgent):
-    """Like `IntersimpleFlatAgent`, with speed deviation and collision penalty."""
     pass
 
 class IntersimpleTargetSpeedRandom(RewardVisualization, TargetSpeedReward, IntersimpleFlatRandomAgent):
-    """Like `IntersimpleTargetSpeed`, with random agent."""
     pass
 
 class IntersimpleRasterized(RewardVisualization, Reward, ImageObservationAnimation, RasterizedObservation,
