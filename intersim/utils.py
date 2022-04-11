@@ -121,13 +121,14 @@ def df_to_stackedvehicletraj(df, deg=20):
         assert len(df_)-1 == (df_.frame_id.max() - df_.frame_id.min()), 'not contigous?'
 
         t0 = df_.timestamp_ms.min()/1000
-        x = df_.x.values[:-1]
-        y = df_.y.values[:-1]
-        v = (df_.vx.values[:-1] ** 2 + df_.vy.values[:-1] ** 2) ** (1./2)
+        x = df_.x.values
+        y = df_.y.values
+        v = (df_.vx.values ** 2 + df_.vy.values ** 2) ** (1./2)
 
-        dx = df_.x.diff().values[1:]
-        dy = df_.y.diff().values[1:]
+        dx = df_.x.diff().values
+        dy = df_.y.diff().values
         ds = (dx ** 2 + dy ** 2) ** (1./2)
+        ds[0] = 0
 
         s = np.cumsum(ds)
 

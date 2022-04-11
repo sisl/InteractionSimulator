@@ -175,7 +175,7 @@ def test_last_agent():
     assert env._agent == 150
 
     T, _, _ = env._env._svt.simstate.shape
-    assert T == 3007
+    assert T == 3008
 
     env.reset()
 
@@ -208,9 +208,9 @@ def test_reset_equals_playback():
         obs, _, done, _ = env.step(expert_action)
 
     assert not done
-    assert np.allclose(obs, obs_skip, atol=0.16)
-    assert np.allclose(env._env._state, env_skip._env._state, atol=0.19, equal_nan=True)
+    assert np.allclose(obs, obs_skip, atol=0.17)
+    assert np.allclose(env._env._state, env_skip._env._state, atol=0.20, equal_nan=True)
     assert env._env._ind == env_skip._env._ind
     assert (env._env._exceeded == env_skip._env._exceeded).all()
     # comparison not implemented for InteractionGraph, skipping ._env.graph
-    assert np.allclose(env._env.info['raw_state'], env_skip._env.info['raw_state'], atol=0.19, equal_nan=True)
+    assert np.allclose(env._env.info['raw_state'], env_skip._env.info['raw_state'], atol=0.20, equal_nan=True)
