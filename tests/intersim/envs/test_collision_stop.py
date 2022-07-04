@@ -13,7 +13,7 @@ def main():
         os.mkdir(outdir)
     filestr = opj(outdir,'test_collision_stop')
 
-    env = gym.make('intersim:intersim-v0', stop_on_collision=True)
+    env = gym.make('intersim:intersim-v0', disable_env_checker=True, stop_on_collision=True)
     env.reset()
     done = False
     n_frames = 600

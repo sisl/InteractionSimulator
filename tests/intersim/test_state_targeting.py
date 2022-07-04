@@ -25,7 +25,7 @@ def test_state_targeting():
     states, actions = SVT_to_stateactions(svt)
 
     # animate from environment
-    env = gym.make('intersim:intersim-v0', svt=svt, map_path=osm, 
+    env = gym.make('intersim:intersim-v0', disable_env_checker=True, svt=svt, map_path=osm, 
         min_acc=-np.inf, max_acc=np.inf)
     env.reset()
     done = False

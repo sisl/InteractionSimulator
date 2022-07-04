@@ -40,7 +40,7 @@ class Intersimple(gym.Env):
 
         """
         super().__init__()
-        self._env = gym.make('intersim:intersim-v0', *args, **kwargs) # parent intersim environment
+        self._env = gym.make('intersim:intersim-v0', *args, disable_env_checker=True, **kwargs) # parent intersim environment
         self._env._mode = None # TODO: move this to intersim
         self.nv = self._env._nv # number of vehicles in parent environment
         self._agent = 0 # agent index which is currently being controlled
