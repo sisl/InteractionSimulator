@@ -2,11 +2,10 @@
 
 import torch
 from torch import nn
-from intersim.policy import Policy
+from intersim.default_policies.policy import Policy
 import numpy as np
 import time
 from typing import List, Tuple
-from ..envs import Intersimple
 
 class IDM(Policy, nn.Module):
 
@@ -115,7 +114,7 @@ class IDMRulePolicy:
 
     """
 
-    def __init__(self, env: Intersimple,
+    def __init__(self, env,
         target_speed:float= 8.94,
         t_future:List[float]=[0., 1., 2., 3.],
         half_angle:float=60.):
@@ -160,7 +159,7 @@ class IDMRulePolicy:
             action (np.ndarray): action for controlled agent to take
             state (None): None (hidden state for a recurrent policy)
         """
-        return self.forward(observation, *args, **kwargs), None
+        return self.forward(observation, *args, **kwargs)
 
     def forward(self, *args, **kwargs) -> np.ndarray:
         """
@@ -169,10 +168,9 @@ class IDMRulePolicy:
         Returns
             action (np.ndarray): action for controlled agent to take
         """
-        agent = self._env._agent
         full_state = self._env._env.projected_state.numpy() #(nv, 5)
         nv = full_state.shape[0]
-        v = full_state[:,2:3] # (nv, 1)
+        v = full_state[:, 2] # (nv,)
 
         length = 20
         step = 0.1
@@ -194,18 +192,13 @@ class IDMRulePolicy:
         close = np.logical_and(pos_close, heading_close) # (nv, nv, path_length-1)
         close[range(nv), range(nv), :] = False # exclude ego agent
 
-        leader = agent
-        min_idx = np.Inf
         # Determine vehicle that is closest to each agent in terms of path coordinate
         not_close = 1.0 * (close.cumsum(-1) < 1) # (nv, nv, path_length-1)
         first_idx_close = not_close.sum(-1) # sum will be ==nv if agents are never close
 
-        leader = first_idx_close.argmin(-1)
-        min_idx = first_idx_close.min(-1)
-        valid_leader = min_idx < nv
-
-        # Update environment interaction graph with leader
-        self._env._env._graph._neighbor_dict={a:[l] for a, l in enumerate(leader) if valid_leader[a]}
+        leader = first_idx_close.argmin(-1) # (nv,)
+        min_idx = first_idx_close.min(-1) # (nv,)
+        valid_leader = min_idx < nv # (nv,)
 
         d = np.where(valid_leader,
             step * min_idx,
@@ -228,7 +221,7 @@ class IDMRulePolicy:
         assert valid_leader.shape==(nv,)
         return action, leader, valid_leader
 
-    def to_circle(x: np.ndarray) -> np.ndarray:
+    def to_circle(self, x: np.ndarray) -> np.ndarray:
         """
         Casts x (in rad) to [-pi, pi)
 
