@@ -30,7 +30,7 @@ def speed_reward(state, action, info, speed_weight=0.01, collision_penalty=1000.
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation, other vehicles controlled by expert actions."""
 
-    def __init__(self, n_obs:int=5, mu:float=0., random_skip:bool=False, *args, **kwargs):
+    def __init__(self, n_obs:int=5, mu:float=0., random_skip:bool=False, idm:bool=False, *args, **kwargs):
         """
         Initialize base intersimple environment.
 
@@ -38,6 +38,7 @@ class Intersimple(gym.Env):
             n_obs (int): number of layers in the observation skip
             mu (float): regularizer to smooth the expert acceleration calculation
             random_skip (bool): whether to choose start frames randomly on reset
+            use_idm (bool): whether to use IDM to control other agents on impending ego collisions
 
         """
         super().__init__()
@@ -56,6 +57,7 @@ class Intersimple(gym.Env):
 
         self._reset = False # environment has not been reset
 
+        self._use_idm = idm
         self._idm_policy = IDMRulePolicy(self)
         self._apply_idm = torch.zeros((self.nv,), dtype=bool)
 
@@ -166,25 +168,26 @@ class Intersimple(gym.Env):
             next_state = self._env._svt.simstate[self._env._ind + 1]
             gt_action = self._env.target_state(next_state, mu=self._mu) # (nv, 1)
             
-            idm_action, idm_leader, idm_leader_valid = self._idm_policy.predict(None)
-            idm_action = torch.from_numpy(idm_action) # (nv,)
-            idm_leader = torch.from_numpy(idm_leader) # (nv,)
-            idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
+            if self._use_idm:
+                idm_action, idm_leader, idm_leader_valid = self._idm_policy.predict(None)
+                idm_action = torch.from_numpy(idm_action) # (nv,)
+                idm_leader = torch.from_numpy(idm_leader) # (nv,)
+                idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
 
-            # if IDM target is ego vehicle or other IDM vehicle, switch to IDM
-            enable_idm = idm_leader_valid & ((idm_leader == self._agent) | self._apply_idm[idm_leader])
-            # if close enough to GT state (acceleration in bounds) and no collision risk (no IDM target or IDM acceleration larger than GT acceleration), switch back to GT
-            disable_idm = (idm_action > self._env._min_acc) & (idm_action < self._env._max_acc) & (~idm_leader_valid | (idm_action > gt_action.squeeze()))
-            self._apply_idm = (self._apply_idm | enable_idm) & ~disable_idm # (nv,)
-            assert self._apply_idm.shape == (self.nv,)
+                # if IDM target is ego vehicle or other IDM vehicle, switch to IDM
+                enable_idm = idm_leader_valid & ((idm_leader == self._agent) | self._apply_idm[idm_leader])
+                # if close enough to GT state (acceleration in bounds) and no collision risk (no IDM target or IDM acceleration larger than GT acceleration), switch back to GT
+                disable_idm = (idm_action > self._env._min_acc) & (idm_action < self._env._max_acc) & (~idm_leader_valid | (idm_action > gt_action.squeeze()))
+                self._apply_idm = (self._apply_idm | enable_idm) & ~disable_idm # (nv,)
+                assert self._apply_idm.shape == (self.nv,)
 
-            # Update environment interaction graph with leaders
-            # point to self if in IDM mode but without IDM target
-            idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
-            self._env._graph._neighbor_dict={agent:[leader] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
+                # Update environment interaction graph with leaders
+                # point to self if in IDM mode but without IDM target
+                idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
+                self._env._graph._neighbor_dict={agent:[leader] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
 
-            gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
-            assert gt_action.shape == (self.nv, 1)
+                gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
+                assert gt_action.shape == (self.nv, 1)
         else:
             gt_action = torch.ones((self.nv, 1))
 
