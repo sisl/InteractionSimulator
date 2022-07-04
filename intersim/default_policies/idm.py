@@ -170,10 +170,8 @@ class IDMRulePolicy:
             action (np.ndarray): action for controlled agent to take
         """
         agent = self._env._agent
-        state = self._env._env.state.numpy()
         full_state = self._env._env.projected_state.numpy() #(nv, 5)
-        ego_state = full_state[agent] # (5,)
-        v_ego = ego_state[2]
+        nv = full_state.shape[0]
         v = full_state[:,2:3] # (nv, 1)
 
         length = 20
@@ -182,54 +180,53 @@ class IDMRulePolicy:
         heading = self.to_circle(np.arctan2(np.diff(y), np.diff(x)))
 
         paths = np.stack([x[:,:-1],y[:,:-1], heading], axis=1) # (nv, 3, (path_length-1))
-        ego_path = paths[agent:agent+1] # (1, 3, path_length-1)
 
         # (x,y,phi) of all vehicles
         poses = np.expand_dims(full_state[:, [0,1,3]], 2) # (nv, 3, 1)
 
-        diff = ego_path - poses
+        diff = paths[:, np.newaxis] - poses[np.newaxis, :]
         diff[:, 2, :] = self.to_circle(diff[:, 2, :])
 
         # Test if position and heading angle are close for some point on the future vehicle track
-        pos_close = np.sum(diff[:, 0:2, :]**2, 1) <= self.max_pos_error**2 # (nv, path_length-1)
-        heading_close = np.abs(diff[:, 2, :]) <= self.max_deg_error * np.pi / 180 # (nv, path_length-1)
-        # For all vehicles get the path points where they are close to the ego path
-        close = np.logical_and(pos_close, heading_close) # (nv, path_length-1)
-        close[agent, :] = False # exclude ego agent
+        pos_close = np.sum(diff[:, :, 0:2, :]**2, -2) <= self.max_pos_error**2 # (nv, nv, path_length-1)
+        heading_close = np.abs(diff[:, :, 2, :]) <= self.max_deg_error * np.pi / 180 # (nv, nv, path_length-1)
+        # For all combinations of vehicles get the path points where they are close to each other
+        close = np.logical_and(pos_close, heading_close) # (nv, nv, path_length-1)
+        close[range(nv), range(nv), :] = False # exclude ego agent
 
         leader = agent
         min_idx = np.Inf
-        # Determine vehicle that is closest to ego in terms of path coordinate
-        for veh_id in range(len(close)):
-            path_idx = np.nonzero(close[veh_id])[0]
-            # veh_id is never close to agent
-            if len(path_idx) == 0:
-                continue
-            # first path index where veh_id is close to agent
-            elif path_idx[0] < min_idx:
-                leader = veh_id
-                min_idx = path_idx[0]
+        # Determine vehicle that is closest to each agent in terms of path coordinate
+        not_close = 1.0 * (close.cumsum(-1) < 1) # (nv, nv, path_length-1)
+        first_idx_close = not_close.sum(-1) # sum will be ==nv if agents are never close
 
-        if leader != agent:
-            # distance along ego path to point with closest distance
-            d = step * min_idx
+        leader = first_idx_close.argmin(-1)
+        min_idx = first_idx_close.min(-1)
+        valid_leader = min_idx < nv
 
-            # Update environment interaction graph with leader
-            self._env._env._graph._neighbor_dict={agent:[leader]}
+        # Update environment interaction graph with leader
+        self._env._env._graph._neighbor_dict={a:[l] for a, l in enumerate(leader) if valid_leader[a]}
 
-            delta_v = v_ego - v[leader, 0]
-            d_des = self.d_min + self.tau * v_ego + v_ego * delta_v / (2* (self.a_max*self.b_pref)**0.5 )
-            d_des = max(d_des, self.d_min)
-        else:
-            d = np.Inf
-            d_des = self.d_min
-            self._env._env._graph._neighbor_dict={}
+        d = np.where(valid_leader,
+            step * min_idx,
+            np.inf
+        )
+        delta_v = v - v[leader]
+        d_des = np.where(valid_leader,
+            np.maximum(
+                self.d_min + self.tau * v + v * delta_v / (2* (self.a_max*self.b_pref)**0.5 ),
+                self.d_min
+            ),
+            self.d_min
+        )
+        
+        assert (d_des>= self.d_min).all()
+        action = self.a_max*(1 - (v/self.v_max)**4 - (d_des/d)**2)
 
-        assert (d_des>= self.d_min)
-        action = self.a_max*(1 - (v_ego/self.v_max)**4 - (d_des/d)**2)
-
-        assert action.shape==(1,)
-        return action
+        assert action.shape==(nv,)
+        assert leader.shape==(nv,)
+        assert valid_leader.shape==(nv,)
+        return action, leader, valid_leader
 
     def to_circle(x: np.ndarray) -> np.ndarray:
         """
