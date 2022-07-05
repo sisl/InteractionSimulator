@@ -4,7 +4,8 @@ import numpy as np
 import torch
 import logging
 import random
-from intersim.default_policies.idm import IDMRulePolicy
+from intersim.default_policies.policy import Policy
+from intersim.default_policies.idm import IDM2
 from intersim.viz import make_action_viz, make_marker_viz, make_observation_viz, make_lidar_observation_viz, make_reward_viz, Rasta
 import functools
 import matplotlib.pyplot as plt
@@ -30,7 +31,7 @@ def speed_reward(state, action, info, speed_weight=0.01, collision_penalty=1000.
 class Intersimple(gym.Env):
     """Single-agent intersim environment with block observation, other vehicles controlled by expert actions."""
 
-    def __init__(self, n_obs:int=5, mu:float=0., random_skip:bool=False, idm:bool=False, *args, **kwargs):
+    def __init__(self, n_obs:int=5, mu:float=0., random_skip:bool=False, *args, **kwargs):
         """
         Initialize base intersimple environment.
 
@@ -56,10 +57,6 @@ class Intersimple(gym.Env):
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1 + self._n_obs, 1 + self.n_relstates))
 
         self._reset = False # environment has not been reset
-
-        self._use_idm = idm
-        self._idm_policy = IDMRulePolicy(self)
-        self._apply_idm = torch.zeros((self.nv,), dtype=bool)
 
     def _reset_skip(self):
         """
@@ -139,6 +136,15 @@ class Intersimple(gym.Env):
         obs = np.where(np.isnan(obs), np.zeros_like(obs), obs)
 
         return obs
+    
+    def compute_agent_actions(self):
+        if self._env._ind < self._env._svt.simstate.shape[0] - 1:
+            next_state = self._env._svt.simstate[self._env._ind + 1]
+            gt_action = self._env.target_state(next_state, mu=self._mu) # (nv, 1)
+        else:
+            gt_action = torch.ones((self.nv, 1))
+        
+        return gt_action
 
     def step(self, action):
         """
@@ -164,33 +170,7 @@ class Intersimple(gym.Env):
         """
         assert self._reset, 'Call `reset()` to reset the environment before the first step'
 
-        if self._env._ind < self._env._svt.simstate.shape[0] - 1:
-            next_state = self._env._svt.simstate[self._env._ind + 1]
-            gt_action = self._env.target_state(next_state, mu=self._mu) # (nv, 1)
-            
-            if self._use_idm:
-                idm_action, idm_leader, idm_leader_valid = self._idm_policy.predict(None)
-                idm_action = torch.from_numpy(idm_action) # (nv,)
-                idm_leader = torch.from_numpy(idm_leader) # (nv,)
-                idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
-
-                # if IDM target is ego vehicle or other IDM vehicle, switch to IDM
-                enable_idm = idm_leader_valid & ((idm_leader == self._agent) | self._apply_idm[idm_leader])
-                # if close enough to GT state (acceleration in bounds) and no collision risk (no IDM target or IDM acceleration larger than GT acceleration), switch back to GT
-                disable_idm = (idm_action > self._env._min_acc) & (idm_action < self._env._max_acc) & (~idm_leader_valid | (idm_action > gt_action.squeeze()))
-                self._apply_idm = (self._apply_idm | enable_idm) & ~disable_idm # (nv,)
-                assert self._apply_idm.shape == (self.nv,)
-
-                # Update environment interaction graph with leaders
-                # point to self if in IDM mode but without IDM target
-                idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
-                self._env._graph._neighbor_dict={agent:[leader] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
-
-                gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
-                assert gt_action.shape == (self.nv, 1)
-        else:
-            gt_action = torch.ones((self.nv, 1))
-
+        gt_action = self.compute_agent_actions()
         gt_action[self._agent] = torch.tensor(action)
         observation, reward, done, info = self._env.step(gt_action)
 
@@ -212,6 +192,41 @@ class Intersimple(gym.Env):
         Overwrite close to call the parent environment close
         """
         return self._env.close(*args, **kwargs)
+
+class IDMAgents:
+
+    def __init__(self, *args, use_idm:bool=False, idm_policy:Policy=IDM2, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._use_idm = use_idm
+        self._idm_policy = idm_policy(self)
+        self._apply_idm = torch.zeros((self.nv,), dtype=bool)
+    
+    def compute_agent_actions(self):
+        gt_action = super().compute_agent_actions()
+            
+        if self._use_idm:
+            idm_action, idm_leader, idm_leader_valid = self._idm_policy.compute_action(None)
+            idm_action = torch.from_numpy(idm_action) # (nv,)
+            idm_leader = torch.from_numpy(idm_leader) # (nv,)
+            idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
+
+            # if IDM target is ego vehicle or other IDM vehicle, switch to IDM
+            enable_idm = idm_leader_valid & ((idm_leader == self._agent) | self._apply_idm[idm_leader])
+            # if close enough to GT state (acceleration in bounds) and no collision risk (no IDM target or IDM acceleration larger than GT acceleration), switch back to GT
+            disable_idm = (idm_action > self._env._min_acc) & (idm_action < self._env._max_acc) & (~idm_leader_valid | (idm_action > gt_action.squeeze()))
+            self._apply_idm = (self._apply_idm | enable_idm) & ~disable_idm # (nv,)
+            assert self._apply_idm.shape == (self.nv,)
+
+            # Update environment interaction graph with leaders
+            # point to self if in IDM mode but without valid IDM target
+            idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
+            assert not (self._apply_idm & self._env.projected_state[idm_leader_or_self].isnan().any(-1)).any()
+            self._env._graph._neighbor_dict={agent:[leader.item()] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
+
+            gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
+            assert gt_action.shape == (self.nv, 1)
+        
+        return gt_action
 
 class ImitationCompat:
     """Make environment compatible with `imitation` library, especially `RolloutInfoWrapper`."""
@@ -768,10 +783,10 @@ class InfoFilter:
         return observation, reward, done, info
 
 ### Mixin intersimple environment classes
-class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+class IntersimpleMarker(ObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
-class IntersimpleLidar(LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, LidarObservation, Intersimple):
+class IntersimpleLidar(LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, LidarObservation, IDMAgents, Intersimple):
     pass
 
 class IntersimpleNormalizedActions(NormalizedActionSpace, IntersimpleMarker):
@@ -791,17 +806,17 @@ class IntersimpleReward(RewardVisualization, Reward, IntersimpleFlatAgent):
 
 class IntersimpleLidarFlat(RewardVisualization, Reward, FixedAgent, FlatObservation, NormalizedActionSpace,
                            LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz,
-                           ImitationCompat, LidarObservation, Intersimple):
+                           ImitationCompat, LidarObservation, IDMAgents, Intersimple):
     pass
 
 class IntersimpleLidarFlatRandom(RewardVisualization, Reward, RandomAgent, FlatObservation, NormalizedActionSpace,
                            LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz,
-                           ImitationCompat, LidarObservation, Intersimple):
+                           ImitationCompat, LidarObservation, IDMAgents, Intersimple):
     pass
 
 class IntersimpleLidarFlatIncrementingAgent(RewardVisualization, Reward, IncrementingAgent, FlatObservation, NormalizedActionSpace,
                            LidarObservationVisualization, ActionVisualization, InteractionSimulatorMarkerViz,
-                           ImitationCompat, LidarObservation, Intersimple):
+                           ImitationCompat, LidarObservation, IDMAgents, Intersimple):
     pass
 
 class IntersimpleTargetSpeed(RewardVisualization, TargetSpeedReward, IntersimpleFlatAgent):
@@ -814,35 +829,35 @@ class IntersimpleTargetSpeedRandom(RewardVisualization, TargetSpeedReward, Inter
     pass
 
 class IntersimpleRasterized(RewardVisualization, Reward, ImageObservationAnimation, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterized(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedRoute(FixedAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedRouteIncrementingAgent(IncrementingAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedRouteRandomAgent(RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedRouteRandomAgentLocation(RandomLocation, RandomAgent, RewardVisualization, Reward, ImageObservationAnimation, RasterizedRoute, NObservations, RasterizedObservation,
-                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, Intersimple):
+                            NormalizedActionSpace, ActionVisualization, InteractionSimulatorMarkerViz, ImitationCompat, IDMAgents, Intersimple):
     pass
 
 class NRasterizedInfo(InfoFilter, NRasterized):

@@ -103,9 +103,9 @@ class IDM(Policy, nn.Module):
         return y
 
 
-class IDMRulePolicy:
+class IDM2(Policy):
     """
-    IDMRulePolicy returns action predictions based on an IDM policy.
+    IDM2 returns action predictions based on an IDM policy.
 
     The front car is chosen as the closer of:
         - closest car within a 45 degree half angle cone of the ego's heading
@@ -145,25 +145,15 @@ class IDMRulePolicy:
         # for np.remainder nan warnings
         np.seterr(invalid='ignore')
 
-    def predict(self, observation:np.ndarray,
+    def compute_action(self, observation:np.ndarray,
         *args, **kwargs) -> Tuple[np.ndarray, None]:
         """
-        Predict action, state from observation
+        Predict action from observation
 
         (But actually generate next action from underlying environment state)
 
         Args:
             observation (np.ndarray): instantaneous observation from environment
-
-        Returns
-            action (np.ndarray): action for controlled agent to take
-            state (None): None (hidden state for a recurrent policy)
-        """
-        return self.forward(observation, *args, **kwargs)
-
-    def forward(self, *args, **kwargs) -> np.ndarray:
-        """
-        Generate action from underlying environment
 
         Returns
             action (np.ndarray): action for controlled agent to take
@@ -182,12 +172,12 @@ class IDMRulePolicy:
         # (x,y,phi) of all vehicles
         poses = np.expand_dims(full_state[:, [0,1,3]], 2) # (nv, 3, 1)
 
-        diff = paths[:, np.newaxis] - poses[np.newaxis, :]
-        diff[:, 2, :] = self.to_circle(diff[:, 2, :])
+        diff = paths[:, np.newaxis] - poses[np.newaxis, :] # (nv, nv, 3, path_length-1)
+        diff[..., 2, :] = self.to_circle(diff[..., 2, :])
 
         # Test if position and heading angle are close for some point on the future vehicle track
-        pos_close = np.sum(diff[:, :, 0:2, :]**2, -2) <= self.max_pos_error**2 # (nv, nv, path_length-1)
-        heading_close = np.abs(diff[:, :, 2, :]) <= self.max_deg_error * np.pi / 180 # (nv, nv, path_length-1)
+        pos_close = np.sum(diff[..., 0:2, :]**2, -2) <= self.max_pos_error**2 # (nv, nv, path_length-1)
+        heading_close = np.abs(diff[..., 2, :]) <= self.max_deg_error * np.pi / 180 # (nv, nv, path_length-1)
         # For all combinations of vehicles get the path points where they are close to each other
         close = np.logical_and(pos_close, heading_close) # (nv, nv, path_length-1)
         close[range(nv), range(nv), :] = False # exclude ego agent
