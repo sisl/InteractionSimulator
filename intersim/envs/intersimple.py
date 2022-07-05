@@ -215,16 +215,13 @@ class IDMAgents:
             # if close enough to GT state (acceleration in bounds) and no collision risk (no IDM target or IDM acceleration larger than GT acceleration), switch back to GT
             disable_idm = (idm_action > self._env._min_acc) & (idm_action < self._env._max_acc) & (~idm_leader_valid | (idm_action > gt_action.squeeze()))
             self._apply_idm = (self._apply_idm | enable_idm) & ~disable_idm # (nv,)
-            assert self._apply_idm.shape == (self.nv,)
 
             # Update environment interaction graph with leaders
             # point to self if in IDM mode but without valid IDM target
             idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
-            assert not (self._apply_idm & self._env.projected_state[idm_leader_or_self].isnan().any(-1)).any()
             self._env._graph._neighbor_dict={agent:[leader.item()] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
 
             gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
-            assert gt_action.shape == (self.nv, 1)
         
         return gt_action
 
