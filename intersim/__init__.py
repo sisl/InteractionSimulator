@@ -10,10 +10,8 @@ from gym.envs.registration import register
 register(
     id='intersim-v0',
     entry_point='intersim.envs:InteractionSimulator',
-    order_enforce=False,
 )
 register(
     id='intersimple-v0',
     entry_point='intersim.envs:Intersimple',
-    order_enforce=False,
 )
