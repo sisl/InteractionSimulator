@@ -48,7 +48,7 @@ class InteractionSimulator(gym.Env):
                  track: int = 0,
                  svt: StackedVehicleTraj = None, 
                  map_path: str = None, 
-                 graph: InteractionGraph = InteractionGraph(),
+                 graph: InteractionGraph = None,
                  min_acc: float=-10.0, max_acc: float=10.0,
                  stop_on_collision: bool=False,
                  check_collisions: bool=False,
@@ -114,7 +114,7 @@ class InteractionSimulator(gym.Env):
         self._ypoly = self._svt.ypoly
         self._lengths = self._svt.lengths
         self._widths = self._svt.widths
-        self._graph = graph
+        self._graph = InteractionGraph() if graph is None else graph
         self._graph.update_graph(self.projected_state)
         self._reward_method = RewardMethod(reward_method)
         self._observe_method = ObserveMethod(observe_method)

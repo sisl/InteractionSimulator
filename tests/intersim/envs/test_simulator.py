@@ -1,4 +1,6 @@
 import gym
+from intersim.envs.simulator import InteractionSimulator
+from intersim.graph import InteractionGraph
 from intersim.utils import LOCATIONS, MAX_TRACKS, df_to_stackedvehicletraj
 from intersim.graphs import ConeVisibilityGraph
 
@@ -80,3 +82,17 @@ def test_propagate_action_profile_vectorized():
     p1 = torch.stack(env.propagate_action_profile(actions))
     p2 = env.propagate_action_profile_vectorized(actions)
     assert torch.allclose(p1, p2, equal_nan=True)
+
+def test_empty_neighbor_dict():
+    env = InteractionSimulator()
+    assert not env._graph._neighbor_dict
+    env._graph._neighbor_dict = {123: [234]}
+    env = InteractionSimulator()
+    assert not env._graph._neighbor_dict
+
+def test_empty_neighbor_dict_gym():
+    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    assert not env._graph._neighbor_dict
+    env._graph._neighbor_dict = {123: [234]}
+    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    assert not env._graph._neighbor_dict
