@@ -2,7 +2,7 @@ import gym
 import torch
 
 def test_forward_propagation():
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     env.reset()
     for _ in range(20):
         env.step(torch.zeros(env._nv,1))

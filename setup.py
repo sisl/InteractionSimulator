@@ -34,6 +34,7 @@ setup(
         "pyproj",
         "pytest",
         "shapely",
+        "stable-baselines3",
     ],    
     python_requires=">=3.6",
     test_requires=["pytest"],

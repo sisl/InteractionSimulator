@@ -6,8 +6,8 @@ from intersim.graphs import ConeVisibilityGraph
 
 import torch
 cvg = ConeVisibilityGraph(r=20, half_angle=120)
-env = gym.make('intersim:intersim-v0', disable_env_checker=True, graph=cvg)
-env2 = gym.make('intersim:intersim-v0', disable_env_checker=True, graph=cvg, mask_relstate=True)
+env = gym.make('intersim:intersim-v0', graph=cvg)
+env2 = gym.make('intersim:intersim-v0', graph=cvg, mask_relstate=True)
 
 
 def test_mask_relstate():
@@ -73,11 +73,11 @@ def test_locations():
 
     for loc, track in records:
         print(f'loc {loc} track {track}')
-        env = gym.make('intersim:intersim-v0', disable_env_checker=True, loc=loc, track=track)
+        env = gym.make('intersim:intersim-v0', loc=loc, track=track)
         env.reset()
 
 def test_propagate_action_profile_vectorized():
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     actions = 10 * torch.rand((20, 50, 151, 1))
     p1 = torch.stack(env.propagate_action_profile(actions))
     p2 = env.propagate_action_profile_vectorized(actions)
@@ -91,8 +91,8 @@ def test_empty_neighbor_dict():
     assert not env._graph._neighbor_dict
 
 def test_empty_neighbor_dict_gym():
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     assert not env._graph._neighbor_dict
     env._graph._neighbor_dict = {123: [234]}
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     assert not env._graph._neighbor_dict
