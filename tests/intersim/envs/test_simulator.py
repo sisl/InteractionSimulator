@@ -91,8 +91,8 @@ def test_empty_neighbor_dict():
     assert not env._graph._neighbor_dict
 
 def test_empty_neighbor_dict_gym():
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     assert not env._graph._neighbor_dict
     env._graph._neighbor_dict = {123: [234]}
-    env = gym.make('intersim:intersim-v0', disable_env_checker=True)
+    env = gym.make('intersim:intersim-v0')
     assert not env._graph._neighbor_dict
