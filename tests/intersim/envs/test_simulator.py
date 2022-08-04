@@ -48,6 +48,8 @@ def test_generate_paths():
     smax = env.smax[0]
     n = 20
 
+    assert torch.allclose(smax, torch.tensor(35.511131286621094))
+
     xpath, ypath = env._generate_paths(delta=2*smax/n, n=n, is_distance=True, override=False)
     # env.state will be nan for all tracks not visible in the current state
     existing_tracks = ~torch.any(torch.isnan(env.state), dim=1)
@@ -56,6 +58,8 @@ def test_generate_paths():
     assert ~torch.any(torch.isnan(ypath))
 
     v0 = env.state[0, 1]
+    assert torch.allclose(v0, torch.tensor(6.999134063720703))
+    
     xpath, ypath = env._generate_paths(delta=2*smax/(v0*n), n=n, is_distance=False, override=False)
     # env.state will be nan for all tracks not visible in the current state
     existing_tracks = ~torch.any(torch.isnan(env.state), dim=1)
