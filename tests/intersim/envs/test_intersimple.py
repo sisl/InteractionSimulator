@@ -1,8 +1,8 @@
-from intersim.envs import Intersimple, NRasterized
+from intersim.envs import Intersimple, NRasterizedRoute
 import numpy as np
 import logging
 import pytest
-
+import torch
 
 def test_init_runs():
     env = Intersimple()
@@ -214,3 +214,27 @@ def test_reset_equals_playback():
     assert (env._env._exceeded == env_skip._env._exceeded).all()
     # comparison not implemented for InteractionGraph, skipping ._env.graph
     assert np.allclose(env._env.info['raw_state'], env_skip._env.info['raw_state'], atol=0.20, equal_nan=True)
+
+def test_generate_paths():
+    wenv = NRasterizedRoute()
+    wenv._agent = 76
+    wenv.reset()
+    env = wenv._env
+
+    smax = env.smax[0]
+    n = 20
+
+    xpath, ypath = env._generate_paths(delta=2*smax/n, n=n, is_distance=True, override=False)
+    # env.state will be nan for all tracks not visible in the current state
+    existing_tracks = ~torch.any(torch.isnan(env.state), dim=1)
+    xpath, ypath = xpath[existing_tracks], ypath[existing_tracks]
+    assert ~torch.any(torch.isnan(xpath))
+    assert ~torch.any(torch.isnan(ypath))
+
+    v0 = env.state[76, 1]
+    xpath, ypath = env._generate_paths(delta=2*smax/(v0*n), n=n, is_distance=False, override=False)
+    # env.state will be nan for all tracks not visible in the current state
+    existing_tracks = ~torch.any(torch.isnan(env.state), dim=1)
+    xpath, ypath = xpath[existing_tracks], ypath[existing_tracks]
+    assert ~torch.any(torch.isnan(xpath))
+    assert ~torch.any(torch.isnan(ypath))
