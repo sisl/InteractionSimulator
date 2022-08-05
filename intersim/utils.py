@@ -70,7 +70,8 @@ def powerseries(x, deg):
         z = torch.ones([*x.shape,deg+1], dtype=x.dtype)
         for i in range(1,deg+1):
             z[...,i] = x*z[...,i-1]
-    z = torch.stack([x**i for i in range(deg+1)],dim=-1)
+    # z = torch.stack([x**i for i in range(deg+1)],dim=-1)
+    z = torch.pow(x.unsqueeze(-1), torch.arange(deg+1))
     return z
 
 def horner_scheme(x, poly):

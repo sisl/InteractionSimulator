@@ -5,6 +5,7 @@ from enum import Enum
 import torch
 import numpy as np
 import pickle
+from intersim.envs.simulator_jax import generate_paths
 
 from intersim.utils import ssdot_to_simstates, to_circle, get_map_path, get_svt, powerseries, horner_scheme
 from intersim import Box, StackedVehicleTraj, InteractionGraph
@@ -276,31 +277,23 @@ class InteractionSimulator(gym.Env):
 
         if override:
             delta = (self._svt.smax.unsqueeze(1) - self._state[:,0:1]) / n * (n-1) / n
-            ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
+            ds = delta * torch.arange(1,n+1).repeat(self._nv, 1)
         elif is_distance:
-            ds = delta * torch.arange(1,n+1).repeat(self._nv,1)
+            ds = delta * torch.arange(1,n+1).repeat(self._nv, 1)
         else:
             v = self._state[:,1:2]
-            ds = delta * v * torch.arange(1,n+1).repeat(self._nv,1)
+            ds = delta * v * torch.arange(1,n+1).repeat(self._nv, 1)
 
-        s = (ds + self._state[:,0:1]).type(torch.float64)
-        smax = self.smax.type(torch.float64).unsqueeze(1)
-        nni = (s <= smax)
-
-        x = horner_scheme(s, self._xpoly)
-        y = horner_scheme(s, self._ypoly)
-
-        x_max = horner_scheme(smax, self._xpoly)
-        y_max = horner_scheme(smax, self._ypoly)
-
-        dx = horner_scheme(smax, self._svt._dxpoly)
-        dy = horner_scheme(smax, self._svt._dypoly)
-        x_line = x_max + (s - smax) * dx
-        y_line = y_max + (s - smax) * dy
-
-        x[~nni] = x_line[~nni]
-        y[~nni] = y_line[~nni]
-        return x, y
+        x, y = generate_paths(
+            self._state.numpy(),
+            ds.numpy(),
+            self._xpoly.numpy(),
+            self._ypoly.numpy(),
+            self._svt._dxpoly.numpy(),
+            self._svt._dypoly.numpy(),
+            self.smax.numpy()
+        )
+        return torch.from_numpy(np.array(x)), torch.from_numpy(np.array(y))
 
     @property
     def map_info(self):
