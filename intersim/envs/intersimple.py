@@ -205,7 +205,9 @@ class IDMAgents:
         gt_action = super().compute_agent_actions()
             
         if self._use_idm:
-            idm_action, idm_leader, idm_leader_valid = self._idm_policy.compute_action(None)
+            is_ego = torch.zeros((self.nv,), dtype=bool).index_fill_(0, torch.tensor(self._agent), torch.tensor(True))
+            exclude_leader = ~(self._apply_idm | is_ego)
+            idm_action, idm_leader, idm_leader_valid = self._idm_policy.compute_action(None, exclude_leader=exclude_leader)
             idm_action = torch.from_numpy(idm_action) # (nv,)
             idm_leader = torch.from_numpy(idm_leader) # (nv,)
             idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
