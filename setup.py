@@ -35,8 +35,6 @@ setup(
         "pytest",
         "shapely",
         "stable-baselines3",
-        "jaxlib",
-        "jax",
     ],    
     python_requires=">=3.6",
     test_requires=["pytest"],

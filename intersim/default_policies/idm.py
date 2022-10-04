@@ -6,8 +6,6 @@ from intersim.default_policies.policy import Policy
 import numpy as np
 import time
 from typing import List, Tuple
-import jax
-import jax.numpy as jnp
 
 class IDM(Policy, nn.Module):
 
@@ -149,9 +147,9 @@ class IDM2(Policy):
         # for np.remainder nan warnings
         np.seterr(invalid='ignore')
 
-        self._compute_idm_action = jax.jit(lambda x, y, s: compute_idm_action(x, y, s, self.max_pos_error, self.max_deg_error, self.step, self.d_min, self.tau, self.a_max, self.b_pref, self.v_max))
+        self._compute_idm_action = lambda x, y, s, e: compute_idm_action(x, y, s, e, self.max_pos_error, self.max_deg_error, self.step, self.d_min, self.tau, self.a_max, self.b_pref, self.v_max)
 
-    def compute_action(self, observation:np.ndarray,
+    def compute_action(self, observation:np.ndarray, exclude_leader=None,
         *args, **kwargs) -> Tuple[np.ndarray, None]:
         """
         Predict action from observation
@@ -166,51 +164,57 @@ class IDM2(Policy):
         """
         x, y = self._env._env._generate_paths(delta=self.step, n=self.length/self.step, is_distance=True)
         full_state = self.ps() #(nv, 5)
-        action, leader, valid_leader = self.idmact(x.numpy(), y.numpy(), full_state.numpy())
+
+        if exclude_leader is None:
+            exclude_leader = torch.zeros((self.nv,), dtype=bool)
+        exclude_leader = exclude_leader | full_state.isnan().any(-1)
+        
+        action, leader, valid_leader = self.idmact(x.numpy(), y.numpy(), full_state.numpy(), exclude_leader.numpy())
         return np.array(action), np.array(leader, dtype=int), np.array(valid_leader, dtype=bool)
     
     def ps(self):
         return self._env._env.projected_state
     
-    def idmact(self, x, y, state):
-        return self._compute_idm_action(x, y, state)
+    def idmact(self, x, y, state, exclude_leader):
+        return self._compute_idm_action(x, y, state, exclude_leader)
 
-def compute_idm_action(x, y, full_state, max_pos_error, max_deg_error, step, d_min, tau, a_max, b_pref, v_max):
+def compute_idm_action(x, y, full_state, exclude_leader, max_pos_error, max_deg_error, step, d_min, tau, a_max, b_pref, v_max):
     nv = full_state.shape[0]
     v = full_state[:, 2] # (nv,)
     
-    heading = to_circle(jnp.arctan2(jnp.diff(y), jnp.diff(x)))
+    heading = to_circle(np.arctan2(np.diff(y), np.diff(x)))
 
-    paths = jnp.stack([x[:,:-1],y[:,:-1], heading], axis=1) # (nv, 3, (path_length-1))
+    paths = np.stack([x[:,:-1],y[:,:-1], heading], axis=1) # (nv, 3, (path_length-1))
 
     # (x,y,phi) of all vehicles
-    poses = jnp.expand_dims(full_state[:, [0,1,3]], 2) # (nv, 3, 1)
+    poses = np.expand_dims(full_state[:, [0,1,3]], 2) # (nv, 3, 1)
 
-    diff = paths[:, jnp.newaxis] - poses[jnp.newaxis, :] # (nv, nv, 3, path_length-1)
-    diff = diff.at[..., 2, :].set(to_circle(diff[..., 2, :]))
+    diff = paths[:, np.newaxis] - poses[np.newaxis, ~exclude_leader] # (nv, nv-exclude_leader.sum(), 3, path_length-1)
+    diff[..., 2, :] = to_circle(diff[..., 2, :])
 
     # Test if position and heading angle are close for some point on the future vehicle track
-    pos_close = jnp.sum(diff[..., 0:2, :]**2, -2) <= max_pos_error**2 # (nv, nv, path_length-1)
-    heading_close = jnp.abs(diff[..., 2, :]) <= max_deg_error * jnp.pi / 180 # (nv, nv, path_length-1)
+    pos_close = np.sum(diff[..., 0:2, :]**2, -2) <= max_pos_error**2 # (nv, nv', path_length-1)
+    heading_close = np.abs(diff[..., 2, :]) <= max_deg_error * np.pi / 180 # (nv, nv', path_length-1)
     # For all combinations of vehicles get the path points where they are close to each other
-    close = jnp.logical_and(pos_close, heading_close) # (nv, nv, path_length-1)
-    close = close.at[jnp.arange(nv), jnp.arange(nv), :].set(False) # exclude ego agent
+    close = np.logical_and(pos_close, heading_close) # (nv, nv', path_length-1)
+    close[np.eye(nv, dtype=bool)[:, ~exclude_leader], :] = False # exclude ego agent
 
     # Determine vehicle that is closest to each agent in terms of path coordinate
-    not_close = 1.0 * (close.cumsum(-1) < 1) # (nv, nv, path_length-1)
-    first_idx_close = not_close.sum(-1) # sum will be ==nv if agents are never close
+    not_close = 1.0 * (close.cumsum(-1) < 1) # (nv, nv', path_length-1)
+    first_idx_close = not_close.sum(-1) # sum will be == not_close.shape[-1] if agents are never close
 
-    leader = first_idx_close.argmin(-1) # (nv,)
+    map_indices = np.arange(nv)[~exclude_leader]
+    leader = map_indices[first_idx_close.argmin(-1)] # (nv,)
     min_idx = first_idx_close.min(-1) # (nv,)
-    valid_leader = min_idx < nv # (nv,)
+    valid_leader = min_idx < not_close.shape[-1] # (nv,)
 
-    d = jnp.where(valid_leader,
+    d = np.where(valid_leader,
         step * min_idx,
-        jnp.inf
+        np.inf
     )
     delta_v = v - v[leader]
-    d_des = jnp.where(valid_leader,
-        jnp.maximum(
+    d_des = np.where(valid_leader,
+        np.maximum(
             d_min + tau * v + v * delta_v / (2* (a_max*b_pref)**0.5 ),
             d_min
         ),
@@ -225,15 +229,15 @@ def compute_idm_action(x, y, full_state, max_pos_error, max_deg_error, step, d_m
     assert valid_leader.shape==(nv,)
     return action, leader, valid_leader
 
-def to_circle(x: jnp.ndarray) -> jnp.ndarray:
+def to_circle(x: np.ndarray) -> np.ndarray:
     """
     Casts x (in rad) to [-pi, pi)
 
     Args:
-        x (jnp.ndarray): (*) input angle (radians)
+        x (np.ndarray): (*) input angle (radians)
 
     Returns:
-        y (jnp.ndarray): (*) x cast to [-pi, pi)
+        y (np.ndarray): (*) x cast to [-pi, pi)
     """
-    y = jnp.remainder(x + jnp.pi, 2*jnp.pi) - jnp.pi
+    y = np.remainder(x + np.pi, 2*np.pi) - np.pi
     return y

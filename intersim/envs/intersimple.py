@@ -200,12 +200,15 @@ class IDMAgents:
         self._use_idm = use_idm
         self._idm_policy = idm_policy(self)
         self._apply_idm = torch.zeros((self.nv,), dtype=bool)
+        self._update_graph = False
     
     def compute_agent_actions(self):
         gt_action = super().compute_agent_actions()
             
         if self._use_idm:
-            idm_action, idm_leader, idm_leader_valid = self._idm_policy.compute_action(None)
+            is_ego = torch.zeros((self.nv,), dtype=bool).index_fill_(0, torch.tensor(self._agent), torch.tensor(True))
+            exclude_leader = ~(self._apply_idm | is_ego)
+            idm_action, idm_leader, idm_leader_valid = self._idm_policy.compute_action(None, exclude_leader=exclude_leader)
             idm_action = torch.from_numpy(idm_action) # (nv,)
             idm_leader = torch.from_numpy(idm_leader) # (nv,)
             idm_leader_valid = torch.from_numpy(idm_leader_valid) # (nv,)
@@ -219,7 +222,12 @@ class IDMAgents:
             # Update environment interaction graph with leaders
             # point to self if in IDM mode but without valid IDM target
             idm_leader_or_self = torch.where(idm_leader_valid, idm_leader, torch.arange(len(idm_leader)))
-            self._env._graph._neighbor_dict={agent:[leader.item()] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
+            
+            neighbor_dict = {agent:[leader.item()] for agent, leader in enumerate(idm_leader_or_self) if self._apply_idm[agent]}
+            if self._update_graph:
+                self._env._graph._neighbor_dict.update(neighbor_dict)
+            else:
+                self._env._graph._neighbor_dict = neighbor_dict
 
             gt_action = torch.where(self._apply_idm.unsqueeze(-1), idm_action.unsqueeze(-1), gt_action) # (nv, 1)
         

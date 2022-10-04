@@ -144,7 +144,13 @@ class AnimatedViz:
             graph = self._graphs[i]
             for e in graph:
                 stidx, enidx = e
-                
+
+                if np.isnan([
+                    self._x[i, stidx], self._y[i, stidx],
+                    self._x[i, enidx], self._y[i, enidx],
+                    ]).any():
+                    continue
+
                 #arrow_func = matplotlib.patches.ConnectionPatch if (enidx, stidx) in graph else matplotlib.patches.Arrow
                 ars = '<|-|>' if (enidx, stidx) in graph else '-|>'
                 arrow = matplotlib.patches.FancyArrowPatch(posA = (self._x[i,stidx], self._y[i,stidx]),
